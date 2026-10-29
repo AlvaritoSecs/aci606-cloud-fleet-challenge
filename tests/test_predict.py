@@ -90,3 +90,29 @@ def test_without_model_predict_is_503_and_telemetry_still_works(tmp_path):
         assert c.get("/health").json()["model_loaded"] is False
         assert c.post("/telemetry", json=SAMPLE).status_code == 200
         assert c.get("/robots").json()[0]["predicted_status"] is None
+
+
+def test_fast_path_matches_full_pipeline():
+    """El atajo NumPy debe dar las mismas probabilidades que el pipeline guardado."""
+    import random
+    import sys
+    from pathlib import Path
+
+    import numpy as np
+    import pandas as pd
+
+    from app.model import ModelService
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "simulator"))
+    from core import make_robot, step_robot
+
+    m = ModelService()
+    m.load()
+    assert m.info()["fast_path"] is True
+    rng = random.Random(1)
+    robots = [make_robot(i + 1, rng) for i in range(8)]
+    for i in range(800):
+        sample, _ = step_robot(robots[i % 8], rng)
+        full = m.pipeline.predict_proba(pd.DataFrame([sample]))[0]
+        assert np.allclose(m._fast(sample), full, atol=1e-12)
+        assert m.predict(sample)["predicted_status"] == m.pipeline.classes_[full.argmax()]
