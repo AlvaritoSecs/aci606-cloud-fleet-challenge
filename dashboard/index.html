@@ -5,58 +5,271 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ACI606 Cloud Fleet Dashboard</title>
   <style>
-    :root { font-family: Inter, system-ui, sans-serif; color-scheme: dark; }
-    body { margin: 0; background:#0d1117; color:#e6edf3; }
-    header { padding:22px 28px; border-bottom:1px solid #30363d; display:flex; justify-content:space-between; }
-    h1 { margin:0; font-size:22px; }
-    .tag { color:#8b949e; }
-    main { padding:28px; }
-    .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; }
-    .card { border:1px solid #30363d; border-radius:14px; padding:18px; background:#161b22; }
-    .robot { font-size:20px; font-weight:700; margin-bottom:12px; }
-    .row { display:flex; justify-content:space-between; padding:5px 0; color:#c9d1d9; }
-    .bar { height:8px; background:#30363d; border-radius:99px; overflow:hidden; margin-top:7px; }
-    .fill { height:100%; background:#58a6ff; }
-    .empty { padding:40px; text-align:center; color:#8b949e; border:1px dashed #30363d; border-radius:14px; }
+    :root {
+      color-scheme: dark;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+      --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #e6edf3; --muted: #8b949e;
+      --normal: #3fb950; --warning: #d29922; --critical: #f85149; --accent: #58a6ff; --none: #6e7681;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    header { padding: 18px 24px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
+    h1 { margin: 0; font-size: 20px; }
+    h2 { margin: 0 0 12px; font-size: 15px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    .tag { color: var(--muted); font-size: 13px; }
+    main { padding: 20px 24px 40px; display: grid; gap: 24px; }
+    .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px; font-size: 13px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--none); }
+    .ok .dot { background: var(--normal); } .bad .dot { background: var(--critical); } .warn .dot { background: var(--warning); }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+    .kpi .v { font-size: 26px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .kpi .l { color: var(--muted); font-size: 13px; }
+    .kpi.normal .v { color: var(--normal); } .kpi.warning .v { color: var(--warning); } .kpi.critical .v { color: var(--critical); }
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--none); border-radius: 12px; padding: 14px 16px; cursor: pointer; text-align: left; color: inherit; font: inherit; width: 100%; }
+    .card:hover, .card:focus-visible { border-color: var(--accent); outline: none; }
+    .card.selected { box-shadow: 0 0 0 2px var(--accent); }
+    .card.NORMAL { border-left-color: var(--normal); } .card.WARNING { border-left-color: var(--warning); } .card.CRITICAL { border-left-color: var(--critical); }
+    .card.stale { opacity: .55; }
+    .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .robot { font-size: 18px; font-weight: 700; overflow-wrap: anywhere; }
+    .badge { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px; background: #21262d; white-space: nowrap; }
+    .badge.NORMAL { color: var(--normal); } .badge.WARNING { color: var(--warning); } .badge.CRITICAL { color: var(--critical); } .badge.NONE { color: var(--muted); }
+    .row { display: flex; justify-content: space-between; padding: 3px 0; color: #c9d1d9; font-size: 14px; font-variant-numeric: tabular-nums; }
+    .row span:first-child { color: var(--muted); }
+    .bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 4px 0 8px; }
+    .fill { height: 100%; background: var(--accent); }
+    .fill.low { background: var(--critical); }
+    .seen { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+    .hist-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; margin-bottom: 8px; }
+    svg { width: 100%; height: auto; display: block; }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+    .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+    .empty { padding: 32px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; }
+    @media (max-width: 600px) { header, main { padding-left: 16px; padding-right: 16px; } .kpi .v { font-size: 22px; } }
   </style>
 </head>
 <body>
 <header>
-  <div><h1>Cloud Fleet Dashboard</h1><div class="tag">ACI606 · starter</div></div>
-  <div id="status" class="tag">esperando telemetría...</div>
+  <div>
+    <h1>Cloud Fleet Dashboard</h1>
+    <div class="tag">ACI606 · telemetría persistente e inferencia en la nube</div>
+  </div>
+  <div class="pills" aria-live="polite">
+    <span id="p-api" class="pill"><span class="dot"></span><span>API: …</span></span>
+    <span id="p-db" class="pill"><span class="dot"></span><span>Base de datos: …</span></span>
+    <span id="p-model" class="pill"><span class="dot"></span><span>Modelo: …</span></span>
+    <span id="p-updated" class="pill tag">actualizando…</span>
+  </div>
 </header>
 <main>
-  <div id="cards" class="cards"></div>
+  <section aria-label="Resumen de la flota">
+    <h2>Flota</h2>
+    <div class="kpis">
+      <div class="kpi"><div class="l">Robots conectados</div><div class="v" id="k-connected">–</div><div class="l" id="k-known"></div></div>
+      <div class="kpi normal"><div class="l">NORMAL</div><div class="v" id="k-NORMAL">–</div></div>
+      <div class="kpi warning"><div class="l">WARNING</div><div class="v" id="k-WARNING">–</div></div>
+      <div class="kpi critical"><div class="l">CRITICAL</div><div class="v" id="k-CRITICAL">–</div></div>
+    </div>
+  </section>
+
+  <section aria-label="Servicio">
+    <h2>Servicio</h2>
+    <div class="kpis">
+      <div class="kpi"><div class="l">Telemetrías recibidas</div><div class="v" id="m-tel">–</div><div class="l">desde el último arranque</div></div>
+      <div class="kpi"><div class="l">Predicciones /predict</div><div class="v" id="m-pred">–</div><div class="l" id="m-avg"></div></div>
+      <div class="kpi"><div class="l">Latencia /predict P50 · P95</div><div class="v" id="m-lat">–</div><div class="l">ms, medida en el servidor</div></div>
+      <div class="kpi"><div class="l">Errores 4xx · 5xx</div><div class="v" id="m-err">–</div><div class="l">4xx = datos rechazados</div></div>
+      <div class="kpi"><div class="l">Tiempo encendido</div><div class="v" id="m-up">–</div><div class="l" id="m-started"></div></div>
+    </div>
+  </section>
+
+  <section aria-label="Robots">
+    <h2>Robots <span class="tag">· toca un robot para ver su historial</span></h2>
+    <div id="cards" class="cards"></div>
+  </section>
+
+  <section aria-label="Historial" class="panel">
+    <div class="hist-head">
+      <h2 id="h-title" style="margin:0">Historial</h2>
+      <span class="tag" id="h-info">Selecciona un robot.</span>
+    </div>
+    <div id="h-chart"></div>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--critical)"></span>Temperatura del motor (°C)</span>
+      <span><span class="sw" style="background:var(--accent)"></span>Vibración</span>
+      <span><span class="sw" style="background:var(--normal)"></span><span class="sw" style="background:var(--warning)"></span><span class="sw" style="background:var(--critical)"></span>Estado predicho en cada muestra</span>
+    </div>
+  </section>
 </main>
 <script>
-const cards = document.getElementById('cards');
-const statusEl = document.getElementById('status');
+const STALE_SECONDS = 15;     // sin telemetría en este tiempo = robot desconectado
+const HISTORY_POINTS = 150;   // muestras que dibuja el gráfico
+const STATES = ['NORMAL', 'WARNING', 'CRITICAL'];
+const $ = (id) => document.getElementById(id);
+let selected = null;
+let lastRobots = [];
+
+// Todo texto que viene de la API se escapa antes de insertarlo en el HTML.
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+}
+function num(value, digits) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(digits) : '–';
+}
+function ageSeconds(iso) {
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? Math.max(0, (Date.now() - t) / 1000) : Infinity;
+}
+function fmtAge(s) {
+  if (!Number.isFinite(s)) return 'sin datos';
+  if (s < 60) return `hace ${Math.round(s)} s`;
+  if (s < 3600) return `hace ${Math.round(s / 60)} min`;
+  return `hace ${Math.round(s / 3600)} h`;
+}
+function fmtUptime(s) {
+  s = Math.floor(Number(s) || 0);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h ? `${h} h ${m} min` : m ? `${m} min ${s % 60} s` : `${s} s`;
+}
+function setPill(id, cls, text) {
+  const el = $(id);
+  el.className = `pill ${cls}`;
+  el.lastElementChild.textContent = text;
+}
 
 function card(r) {
-  const battery = Math.max(0, Math.min(100, Number(r.battery)));
-  return `<div class="card">
-    <div class="robot">${r.robot_id}</div>
-    <div class="row"><span>Battery</span><span>${battery.toFixed(1)} %</span></div>
-    <div class="bar"><div class="fill" style="width:${battery}%"></div></div>
-    <div class="row"><span>Speed</span><span>${Number(r.speed).toFixed(2)}</span></div>
-    <div class="row"><span>Motor temp.</span><span>${Number(r.motor_temp).toFixed(1)} °C</span></div>
-    <div class="row"><span>Vibration</span><span>${Number(r.vibration).toFixed(2)}</span></div>
-    <div class="row"><span>Obstacle</span><span>${Number(r.obstacle_distance).toFixed(2)} m</span></div>
-  </div>`;
+  const status = STATES.includes(r.predicted_status) ? r.predicted_status : 'NONE';
+  const label = status === 'NONE' ? 'SIN PREDICCIÓN' : status;
+  const battery = Math.max(0, Math.min(100, Number(r.battery) || 0));
+  const age = ageSeconds(r.received_at);
+  const stale = age > STALE_SECONDS;
+  const conf = Number.isFinite(Number(r.confidence)) ? ` · ${Math.round(r.confidence * 100)} %` : '';
+  const id = esc(r.robot_id);
+  return `<button class="card ${status}${stale ? ' stale' : ''}${r.robot_id === selected ? ' selected' : ''}" data-id="${id}" aria-pressed="${r.robot_id === selected}">
+    <div class="top"><span class="robot">${id}</span><span class="badge ${status}">${label}${conf}</span></div>
+    <div class="row"><span>Batería</span><span>${battery.toFixed(1)} %</span></div>
+    <div class="bar"><div class="fill${battery < 20 ? ' low' : ''}" style="width:${battery}%"></div></div>
+    <div class="row"><span>Temp. motor</span><span>${num(r.motor_temp, 1)} °C</span></div>
+    <div class="row"><span>Vibración</span><span>${num(r.vibration, 2)}</span></div>
+    <div class="row"><span>Corriente</span><span>${num(r.motor_current, 2)} A</span></div>
+    <div class="row"><span>Velocidad</span><span>${num(r.speed, 2)} m/s</span></div>
+    <div class="row"><span>Obstáculo</span><span>${num(r.obstacle_distance, 2)} m</span></div>
+    <div class="seen">${stale ? 'Desconectado · ' : ''}última telemetría ${fmtAge(age)}</div>
+  </button>`;
 }
 
-async function refresh() {
+async function getJSON(url) {
+  const res = await fetch(url, {cache: 'no-store'});
+  if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}`);
+  return res.json();
+}
+
+async function refreshRobots() {
   try {
-    const res = await fetch('/robots');
-    const robots = await res.json();
-    statusEl.textContent = `${robots.length} robot(s) conectados`;
-    cards.innerHTML = robots.length ? robots.map(card).join('') : '<div class="empty">Ejecuta el simulador para comenzar a recibir robots.</div>';
+    const robots = await getJSON('/robots');
+    lastRobots = robots;
+    const connected = robots.filter((r) => ageSeconds(r.received_at) <= STALE_SECONDS);
+    $('k-connected').textContent = connected.length;
+    $('k-known').textContent = `${robots.length} con historial`;
+    for (const s of STATES) $('k-' + s).textContent = connected.filter((r) => r.predicted_status === s).length;
+    $('cards').innerHTML = robots.length
+      ? robots.map(card).join('')
+      : '<div class="empty">Aún no hay telemetría. Ejecuta el simulador apuntando a esta URL.</div>';
+    if (!selected && connected.length) select(connected[0].robot_id);
+    $('p-updated').textContent = 'actualizado ' + new Date().toLocaleTimeString();
+    setPill('p-api', 'ok', 'API: en línea');
   } catch (err) {
-    statusEl.textContent = 'API no disponible';
+    setPill('p-api', 'bad', 'API: no disponible');
   }
 }
-refresh();
-setInterval(refresh, 1500);
+
+async function refreshService() {
+  try {
+    const [health, m] = await Promise.all([getJSON('/health'), getJSON('/metrics')]);
+    setPill('p-db', health.database === 'ok' ? 'ok' : health.database === 'error' ? 'bad' : 'warn',
+      `Base de datos: ${health.persistence} ${health.database === 'ok' ? 'OK' : health.database}`);
+    setPill('p-model', health.model_loaded ? 'ok' : 'bad',
+      health.model_loaded ? `Modelo: ${health.model_version} cargado` : 'Modelo: no cargado');
+    $('m-tel').textContent = m.telemetry_requests ?? m.requests_received ?? '–';
+    $('m-pred').textContent = m.prediction_requests ?? '–';
+    $('m-avg').textContent = m.avg_prediction_latency_ms != null ? `promedio ${num(m.avg_prediction_latency_ms, 1)} ms` : 'sin llamadas aún';
+    const lat = m.predict_latency_ms || {};
+    $('m-lat').textContent = lat.p50 != null ? `${num(lat.p50, 1)} · ${num(lat.p95, 1)}` : '–';
+    $('m-err').textContent = `${m.errors_4xx ?? 0} · ${m.errors_5xx ?? 0}`;
+    $('m-up').textContent = fmtUptime(m.uptime_seconds);
+    $('m-started').textContent = m.started_at ? `desde ${new Date(m.started_at).toLocaleString()}` : '';
+  } catch (err) {
+    setPill('p-db', 'warn', 'Base de datos: sin datos');
+    setPill('p-model', 'warn', 'Modelo: sin datos');
+  }
+}
+
+function chart(rows) {
+  const W = 760, H = 230, L = 44, R = 44, T = 12, B = 34;
+  const temps = rows.map((r) => Number(r.motor_temp));
+  const vibs = rows.map((r) => Number(r.vibration));
+  const tMin = Math.floor(Math.min(...temps) - 2), tMax = Math.ceil(Math.max(...temps) + 2);
+  const vMax = Math.max(0.5, Math.ceil(Math.max(...vibs) * 10) / 10);
+  const x = (i) => L + (rows.length === 1 ? 0 : i * (W - L - R) / (rows.length - 1));
+  const yT = (v) => T + (H - T - B) * (1 - (v - tMin) / (tMax - tMin || 1));
+  const yV = (v) => T + (H - T - B) * (1 - v / vMax);
+  const line = (vals, y) => vals.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join('');
+  const colors = {NORMAL: 'var(--normal)', WARNING: 'var(--warning)', CRITICAL: 'var(--critical)'};
+  const step = rows.length > 1 ? (W - L - R) / (rows.length - 1) : 4;
+  const strip = rows.map((r, i) => `<rect x="${(x(i) - step / 2).toFixed(1)}" y="${H - 18}" width="${(step + 0.5).toFixed(1)}" height="8" fill="${colors[r.predicted_status] || 'var(--none)'}"/>`).join('');
+  const grid = [0, 0.5, 1].map((f) => {
+    const y = T + (H - T - B) * f;
+    return `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1"/>
+      <text x="${L - 6}" y="${y + 4}" text-anchor="end" font-size="11" fill="var(--critical)">${(tMax - f * (tMax - tMin)).toFixed(0)}</text>
+      <text x="${W - R + 6}" y="${y + 4}" font-size="11" fill="var(--accent)">${(vMax * (1 - f)).toFixed(1)}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Temperatura, vibración y estado predicho de las últimas ${rows.length} muestras">
+    ${grid}
+    <path d="${line(temps, yT)}" fill="none" stroke="var(--critical)" stroke-width="2"/>
+    <path d="${line(vibs, yV)}" fill="none" stroke="var(--accent)" stroke-width="2"/>
+    ${strip}
+  </svg>`;
+}
+
+async function refreshHistory() {
+  if (!selected) return;
+  try {
+    const rows = await getJSON(`/robots/${encodeURIComponent(selected)}/history?limit=${HISTORY_POINTS}`);
+    const counts = STATES.map((s) => `${s} ${rows.filter((r) => r.predicted_status === s).length}`).join(' · ');
+    $('h-title').textContent = `Historial de ${selected}`;
+    $('h-info').textContent = `últimas ${rows.length} muestras · ${counts}`;
+    $('h-chart').innerHTML = rows.length ? chart(rows) : '<div class="empty">Sin datos.</div>';
+  } catch (err) {
+    $('h-info').textContent = 'No se pudo cargar el historial.';
+  }
+}
+
+function select(id) {
+  selected = id;
+  document.querySelectorAll('.card').forEach((c) => {
+    const on = c.dataset.id === id;
+    c.classList.toggle('selected', on);
+    c.setAttribute('aria-pressed', on);
+  });
+  refreshHistory();
+}
+
+$('cards').addEventListener('click', (ev) => {
+  const el = ev.target.closest('.card');
+  if (!el) return;
+  const robot = lastRobots.find((r) => r.robot_id === el.dataset.id);
+  if (robot) select(robot.robot_id);
+});
+
+refreshRobots(); refreshService();
+setInterval(refreshRobots, 2000);
+setInterval(refreshService, 5000);
+setInterval(refreshHistory, 5000);
 </script>
 </body>
 </html>
