@@ -151,3 +151,12 @@ def test_ingest_is_reasonably_fast(client):
     for _ in range(50):
         client.post("/telemetry", json=SAMPLE)
     assert (time.perf_counter() - t0) / 50 < 0.2
+
+
+def test_history_limit_returns_last_n_in_order(client):
+    for i in range(30):
+        client.post("/telemetry", json={**SAMPLE, "timestamp": 1780000000.0 + i})
+    last = client.get("/robots/R01/history?limit=5").json()
+    assert [h["timestamp"] for h in last] == [1780000000.0 + i for i in range(25, 30)]
+    assert len(client.get("/robots/R01/history").json()) == 30  # sin limit: historial completo
+    assert client.get("/robots/R01/history?limit=0").status_code == 422

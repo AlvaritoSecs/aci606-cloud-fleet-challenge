@@ -113,11 +113,21 @@ def fetch_latest(engine: Engine) -> list[dict]:
         return [_row(r) for r in conn.execute(stmt).mappings()]
 
 
-def fetch_history(engine: Engine, robot_id: str) -> list[dict]:
-    """Historial completo de un robot, en orden de llegada. Sin límite: el PDF exige el historial completo."""
-    stmt = select(*PUBLIC_COLUMNS).where(telemetry.c.robot_id == robot_id).order_by(telemetry.c.id)
+def fetch_history(engine: Engine, robot_id: str, limit: int | None = None) -> list[dict]:
+    """Historial de un robot en orden de llegada.
+
+    Por defecto es el historial COMPLETO (lo exige el PDF). `limit` opcional devuelve solo
+    los últimos N registros, también en orden cronológico; lo usa el panel para no descargar
+    miles de filas cada pocos segundos.
+    """
+    stmt = select(*PUBLIC_COLUMNS).where(telemetry.c.robot_id == robot_id)
+    if limit is None:
+        stmt = stmt.order_by(telemetry.c.id)
+    else:
+        stmt = stmt.order_by(telemetry.c.id.desc()).limit(limit)
     with engine.connect() as conn:
-        return [_row(r) for r in conn.execute(stmt).mappings()]
+        rows = [_row(r) for r in conn.execute(stmt).mappings()]
+    return rows if limit is None else rows[::-1]
 
 
 class LatestCache:
