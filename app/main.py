@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,12 +14,13 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from app import db
+from app.metrics import Metrics
 from app.model import ModelService
 from app.schemas import PredictionRequest, Telemetry
 
 log = logging.getLogger("aci606")
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 DASHBOARD = Path(__file__).resolve().parents[1] / "dashboard" / "index.html"
 
 router = APIRouter()
@@ -93,7 +95,7 @@ def predict(sample: PredictionRequest, request: Request) -> dict:
     if not state.model.ready:
         raise HTTPException(status_code=503, detail="Model not loaded. Check MODEL_PATH and the deploy logs.")
     p = state.model.predict(sample.model_dump())
-    state.prediction_count += 1
+    state.metrics.record_prediction(p["predicted_status"], p["inference_ms"])
     return {
         "robot_id": sample.robot_id,
         "predicted_status": p["predicted_status"],
@@ -107,11 +109,17 @@ def predict(sample: PredictionRequest, request: Request) -> dict:
 def metrics(request: Request) -> dict:
     state = request.app.state
     return {
+        # Claves del starter (se mantienen).
         "requests_received": state.telemetry_count,
         "robots_in_memory": len(state.cache),
         "persistence": _persistence_name(state.engine),
         "prediction_service": "READY" if state.model.ready else "MODEL_NOT_LOADED",
-        "prediction_requests": state.prediction_count,
+        # Estado de dependencias.
+        "database": state.db_status,
+        "model": state.model.info(),
+        # Contadores y latencias desde el último arranque.
+        **state.metrics.snapshot(),
+        "note": "Counters reset when the service restarts; telemetry is persisted in the database.",
     }
 
 
@@ -181,7 +189,20 @@ def create_app(database_url: str | None = None, model_path: str | None = None) -
     app.state.model = ModelService(model_path)
     app.state.db_status = "unknown"
     app.state.telemetry_count = 0
-    app.state.prediction_count = 0
+    app.state.metrics = Metrics()
+
+    @app.middleware("http")
+    async def track_requests(request: Request, call_next):
+        t0 = time.perf_counter()
+        status = 500  # si la solicitud termina en una excepción no controlada
+        try:
+            response = await call_next(request)
+            status = response.status_code
+            return response
+        finally:
+            route = request.scope.get("route")
+            name = f"{request.method} {route.path}" if route is not None else f"{request.method} (sin ruta)"
+            app.state.metrics.record_request(name, status, (time.perf_counter() - t0) * 1000)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(SQLAlchemyError, database_error_handler)
     app.include_router(router)
