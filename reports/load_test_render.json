@@ -1,0 +1,17 @@
+{
+  "api": "https://aci606-cloud-fleet.onrender.com",
+  "measured_at_utc": "2026-10-29T04:00:20+00:00",
+  "client_host": "codespaces-e968ce",
+  "clients": 20,
+  "requests": 400,
+  "ok": 400,
+  "errors": 0,
+  "error_samples": [],
+  "throughput_rps": 102.1,
+  "latency_ms": {
+    "p50": 194.4,
+    "p95": 310.6,
+    "mean": 190.1,
+    "max": 916.9
+  }
+}
