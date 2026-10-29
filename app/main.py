@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
@@ -80,8 +80,12 @@ def list_robots(request: Request) -> list[dict]:
 
 
 @router.get("/robots/{robot_id}/history")
-def robot_history(robot_id: str, request: Request) -> list[dict]:
-    rows = db.fetch_history(request.app.state.engine, robot_id)
+def robot_history(
+    robot_id: str,
+    request: Request,
+    limit: int | None = Query(None, ge=1, le=10_000, description="Opcional: solo los últimos N registros"),
+) -> list[dict]:
+    rows = db.fetch_history(request.app.state.engine, robot_id, limit)
     request.app.state.db_status = "ok"
     if not rows:
         raise HTTPException(status_code=404, detail="Robot not found")
