@@ -96,7 +96,10 @@ def _row(mapping) -> dict:
 
 
 def insert_sample(engine: Engine, sample: dict, prediction: dict | None = None) -> dict:
-    values = {**sample, **(prediction or {}), "received_at": datetime.now(timezone.utc)}
+    # Las columnas de predicción siempre están presentes (None si no hay modelo), así la
+    # fila en caché tiene la misma forma que la leída desde la base.
+    empty = {"predicted_status": None, "confidence": None, "model_version": None}
+    values = {**sample, **empty, **(prediction or {}), "received_at": datetime.now(timezone.utc)}
     with engine.begin() as conn:
         new_id = conn.execute(insert(telemetry).values(**values).returning(telemetry.c.id)).scalar_one()
     return _row({**values, "id": new_id})

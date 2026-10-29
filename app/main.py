@@ -13,11 +13,12 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from app import db
+from app.model import ModelService
 from app.schemas import PredictionRequest, Telemetry
 
 log = logging.getLogger("aci606")
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 DASHBOARD = Path(__file__).resolve().parents[1] / "dashboard" / "index.html"
 
 router = APIRouter()
@@ -40,13 +41,23 @@ def health(request: Request) -> dict:
         "utc": datetime.now(timezone.utc).isoformat(),
         "persistence": _persistence_name(state.engine),
         "database": state.db_status,
+        "model_loaded": state.model.ready,
+        "model_version": state.model.version if state.model.ready else None,
     }
 
 
 @router.post("/telemetry")
 def ingest_telemetry(sample: Telemetry, request: Request) -> dict:
     state = request.app.state
-    row = db.insert_sample(state.engine, sample.model_dump())
+    data = sample.model_dump()
+    # La predicción se guarda junto con la muestra: el panel y el historial la muestran
+    # sin volver a llamar al modelo. Si no hay modelo, la muestra se guarda igual.
+    prediction = None
+    if state.model.ready:
+        p = state.model.predict(data)
+        prediction = {"predicted_status": p["predicted_status"], "confidence": p["confidence"],
+                      "model_version": state.model.version}
+    row = db.insert_sample(state.engine, data, prediction)
     state.cache.update(row)
     state.db_status = "ok"
     state.telemetry_count += 1
@@ -55,6 +66,7 @@ def ingest_telemetry(sample: Telemetry, request: Request) -> dict:
         "robot_id": sample.robot_id,
         "server_time": row["received_at"],
         "note": f"Stored in {_persistence_name(state.engine)}.",
+        "predicted_status": row.get("predicted_status"),
     }
 
 
@@ -75,12 +87,20 @@ def robot_history(robot_id: str, request: Request) -> list[dict]:
 
 
 @router.post("/predict")
-def predict(_: PredictionRequest) -> dict:
-    # Fase 3: cargar models/model.joblib y devolver la predicción real.
-    raise HTTPException(
-        status_code=501,
-        detail="/predict is part of the challenge. Train and integrate your model.",
-    )
+def predict(sample: PredictionRequest, request: Request) -> dict:
+    # Solo usa el modelo en memoria: no toca la base, así su latencia no depende de Neon.
+    state = request.app.state
+    if not state.model.ready:
+        raise HTTPException(status_code=503, detail="Model not loaded. Check MODEL_PATH and the deploy logs.")
+    p = state.model.predict(sample.model_dump())
+    state.prediction_count += 1
+    return {
+        "robot_id": sample.robot_id,
+        "predicted_status": p["predicted_status"],
+        "confidence": p["confidence"],
+        "model_version": state.model.version,
+        "inference_ms": p["inference_ms"],
+    }
 
 
 @router.get("/metrics")
@@ -90,7 +110,8 @@ def metrics(request: Request) -> dict:
         "requests_received": state.telemetry_count,
         "robots_in_memory": len(state.cache),
         "persistence": _persistence_name(state.engine),
-        "prediction_service": "NOT_IMPLEMENTED",
+        "prediction_service": "READY" if state.model.ready else "MODEL_NOT_LOADED",
+        "prediction_requests": state.prediction_count,
     }
 
 
@@ -129,7 +150,7 @@ async def database_error_handler(request: Request, exc: SQLAlchemyError) -> JSON
     return JSONResponse(status_code=503, content={"detail": "Database temporarily unavailable. Retry shortly."})
 
 
-def create_app(database_url: str | None = None) -> FastAPI:
+def create_app(database_url: str | None = None, model_path: str | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         url = database_url or os.environ.get("DATABASE_URL")
@@ -138,6 +159,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
                 "DATABASE_URL no está definida. En Render: Environment -> DATABASE_URL. "
                 "En local: export DATABASE_URL=sqlite:///./local.db"
             )
+        app.state.model.load()
         app.state.engine = db.make_engine(url)
         db.init_db(app.state.engine)
         try:
@@ -156,8 +178,10 @@ def create_app(database_url: str | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.cache = db.LatestCache()
+    app.state.model = ModelService(model_path)
     app.state.db_status = "unknown"
     app.state.telemetry_count = 0
+    app.state.prediction_count = 0
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(SQLAlchemyError, database_error_handler)
     app.include_router(router)
