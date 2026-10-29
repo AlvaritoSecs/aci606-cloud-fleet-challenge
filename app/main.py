@@ -89,8 +89,10 @@ def robot_history(robot_id: str, request: Request) -> list[dict]:
 
 
 @router.post("/predict")
-def predict(sample: PredictionRequest, request: Request) -> dict:
+async def predict(sample: PredictionRequest, request: Request) -> dict:
     # Solo usa el modelo en memoria: no toca la base, así su latencia no depende de Neon.
+    # Es `async` porque no hace E/S bloqueante y el cálculo dura menos de 1 ms: corre directo
+    # en el bucle de eventos, sin pasar por el pool de hilos (que bajo carga agrega espera).
     state = request.app.state
     if not state.model.ready:
         raise HTTPException(status_code=503, detail="Model not loaded. Check MODEL_PATH and the deploy logs.")
