@@ -15,6 +15,8 @@ Servicio Cloud persistente que recibe la telemetría de una flota virtual de rob
 
 El enunciado original del profesor está en [`docs/STARTER_README.md`](docs/STARTER_README.md).
 
+**Integrantes:** Alvaro Gonzalez · Luis Briones — ACI606 Cloud Computing, Universidad de las Américas.
+
 ---
 
 ## 1. Arquitectura
