@@ -1,7 +1,9 @@
 fastapi
 uvicorn[standard]
 requests
-numpy
-pandas
-scikit-learn
-joblib
+# Fijadas: models/model.joblib se entrenó con estas versiones (ver models/model_meta.json).
+# Un modelo de scikit-learn cargado con otra versión puede fallar o predecir distinto.
+numpy==2.5.3
+pandas==3.0.5
+scikit-learn==1.9.1
+joblib==1.6.0

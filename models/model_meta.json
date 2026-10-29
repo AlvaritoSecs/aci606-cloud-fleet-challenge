@@ -1,0 +1,82 @@
+{
+  "model_version": "v1",
+  "model_name": "logistic_regression",
+  "feature_set": "sin_battery_obstacle",
+  "features": [
+    "speed",
+    "motor_temp",
+    "vibration",
+    "motor_current"
+  ],
+  "input_fields": [
+    "robot_id",
+    "timestamp",
+    "x",
+    "y",
+    "speed",
+    "battery",
+    "motor_temp",
+    "vibration",
+    "motor_current",
+    "obstacle_distance"
+  ],
+  "classes": [
+    "CRITICAL",
+    "NORMAL",
+    "WARNING"
+  ],
+  "majority_class_training": "CRITICAL",
+  "selection_rule": "max F1 macro medio en GroupKFold(5) por fleet_id; empate (< 1 desv.) -> modelo más simple y menos variables",
+  "cv_f1_macro_mean": 0.9223,
+  "cv_f1_macro_std": 0.0112,
+  "test_f1_macro": 0.9316,
+  "test_f1_macro_baseline": 0.2871,
+  "fleets_train": [
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    110,
+    112,
+    113,
+    114,
+    116,
+    118,
+    121,
+    122,
+    123,
+    124,
+    125,
+    126,
+    127,
+    128,
+    129
+  ],
+  "fleets_test": [
+    108,
+    109,
+    111,
+    115,
+    117,
+    119,
+    120,
+    130
+  ],
+  "final_model_trained_on": "todas las flotas de data/training.csv (entrenamiento + prueba)",
+  "rows": 105000,
+  "random_state": 606,
+  "single_row_latency_local": {
+    "p50_ms": 2.963,
+    "p95_ms": 4.413,
+    "n": 300
+  },
+  "python": "3.13.18",
+  "sklearn": "1.9.1",
+  "numpy": "2.5.3",
+  "pandas": "3.0.5",
+  "joblib": "1.6.0",
+  "trained_at_utc": "2026-10-28T03:34:19+00:00"
+}
