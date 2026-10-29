@@ -1,6 +1,9 @@
 fastapi
 uvicorn[standard]
 requests
+# Persistencia en PostgreSQL (Neon) con el driver psycopg 3.
+sqlalchemy>=2.0,<2.1
+psycopg[binary]>=3.2,<4
 # Fijadas: models/model.joblib se entrenó con estas versiones (ver models/model_meta.json).
 # Un modelo de scikit-learn cargado con otra versión puede fallar o predecir distinto.
 numpy==2.5.3

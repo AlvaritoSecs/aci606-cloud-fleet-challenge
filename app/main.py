@@ -1,106 +1,167 @@
 from __future__ import annotations
 
-from collections import defaultdict, deque
+import logging
+import math
+import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 
-app = FastAPI(
-    title="ACI606 Cloud Fleet Challenge",
-    version="0.1.0-starter",
-    description="Starter API for the ACI606 Cloud Fleet Challenge.",
-)
+from app import db
+from app.schemas import PredictionRequest, Telemetry
 
-Status = Literal["NORMAL", "WARNING", "CRITICAL"]
+log = logging.getLogger("aci606")
 
+VERSION = "0.2.0"
+DASHBOARD = Path(__file__).resolve().parents[1] / "dashboard" / "index.html"
 
-class Telemetry(BaseModel):
-    robot_id: str = Field(min_length=1, max_length=20)
-    timestamp: float
-    x: float
-    y: float
-    speed: float = Field(ge=0)
-    battery: float = Field(ge=0, le=100)
-    motor_temp: float
-    vibration: float = Field(ge=0)
-    motor_current: float = Field(ge=0)
-    obstacle_distance: float = Field(ge=0)
+router = APIRouter()
 
 
-class PredictionRequest(Telemetry):
-    pass
+def _persistence_name(engine) -> str:
+    return {"postgresql": "POSTGRESQL", "sqlite": "SQLITE"}.get(engine.dialect.name, engine.dialect.name.upper())
 
 
-# Starter storage: intentionally volatile.
-# Students must replace this with persistent storage for the final challenge.
-LATEST: dict[str, Telemetry] = {}
-HISTORY: dict[str, deque[Telemetry]] = defaultdict(lambda: deque(maxlen=100))
-REQUEST_COUNT = 0
-
-
-@app.get("/health")
-def health() -> dict:
+@router.get("/health")
+def health(request: Request) -> dict:
+    # No consulta la base en cada llamada: Render llama /health seguido y cada consulta
+    # mantendría a Neon despierta, gastando la cuota mensual de cómputo.
+    state = request.app.state
     return {
         "status": "ok",
         "service": "aci606-cloud-fleet",
-        "version": app.version,
-        "robots_in_memory": len(LATEST),
+        "version": VERSION,
+        "robots_in_memory": len(state.cache),
         "utc": datetime.now(timezone.utc).isoformat(),
+        "persistence": _persistence_name(state.engine),
+        "database": state.db_status,
     }
 
 
-@app.post("/telemetry")
-def ingest_telemetry(sample: Telemetry) -> dict:
-    global REQUEST_COUNT
-    REQUEST_COUNT += 1
-    LATEST[sample.robot_id] = sample
-    HISTORY[sample.robot_id].append(sample)
+@router.post("/telemetry")
+def ingest_telemetry(sample: Telemetry, request: Request) -> dict:
+    state = request.app.state
+    row = db.insert_sample(state.engine, sample.model_dump())
+    state.cache.update(row)
+    state.db_status = "ok"
+    state.telemetry_count += 1
     return {
         "accepted": True,
         "robot_id": sample.robot_id,
-        "server_time": datetime.now(timezone.utc).isoformat(),
-        "note": "Starter mode: data is stored only in RAM.",
+        "server_time": row["received_at"],
+        "note": f"Stored in {_persistence_name(state.engine)}.",
     }
 
 
-@app.get("/robots")
-def list_robots() -> list[dict]:
-    return [sample.model_dump() for sample in LATEST.values()]
+@router.get("/robots")
+def list_robots(request: Request) -> list[dict]:
+    state = request.app.state
+    state.cache.ensure_loaded(state.engine)
+    return state.cache.all()
 
 
-@app.get("/robots/{robot_id}/history")
-def robot_history(robot_id: str) -> list[dict]:
-    if robot_id not in HISTORY:
+@router.get("/robots/{robot_id}/history")
+def robot_history(robot_id: str, request: Request) -> list[dict]:
+    rows = db.fetch_history(request.app.state.engine, robot_id)
+    request.app.state.db_status = "ok"
+    if not rows:
         raise HTTPException(status_code=404, detail="Robot not found")
-    return [sample.model_dump() for sample in HISTORY[robot_id]]
+    return rows
 
 
-@app.post("/predict")
+@router.post("/predict")
 def predict(_: PredictionRequest) -> dict:
-    # TODO E4: load the trained model and return a real prediction.
-    # Required contract is documented in README.md and the student guide.
+    # Fase 3: cargar models/model.joblib y devolver la predicción real.
     raise HTTPException(
         status_code=501,
         detail="/predict is part of the challenge. Train and integrate your model.",
     )
 
 
-@app.get("/metrics")
-def metrics() -> dict:
-    # TODO E4: extend with latency, errors, throughput and model metrics.
+@router.get("/metrics")
+def metrics(request: Request) -> dict:
+    state = request.app.state
     return {
-        "requests_received": REQUEST_COUNT,
-        "robots_in_memory": len(LATEST),
-        "persistence": "RAM_ONLY",
+        "requests_received": state.telemetry_count,
+        "robots_in_memory": len(state.cache),
+        "persistence": _persistence_name(state.engine),
         "prediction_service": "NOT_IMPLEMENTED",
     }
 
 
-@app.get("/dashboard", response_class=HTMLResponse)
+@router.get("/dashboard", response_class=HTMLResponse)
 def dashboard() -> str:
-    path = Path(__file__).resolve().parents[1] / "dashboard" / "index.html"
-    return path.read_text(encoding="utf-8")
+    return DASHBOARD.read_text(encoding="utf-8")
+
+
+def _clean(value):
+    """Hace serializable un valor que viene del cliente (p. ej. NaN dentro de un error 422)."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(k): _clean(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_clean(v) for v in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
+async def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+    # El manejador por defecto de FastAPI devuelve el valor recibido; si era NaN o Infinity,
+    # la respuesta no se puede serializar como JSON y el 422 se convierte en un 500.
+    errors = [
+        {"loc": list(e.get("loc", ())), "msg": e.get("msg", ""), "type": e.get("type", ""),
+         "input": _clean(e.get("input"))}
+        for e in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": errors})
+
+
+async def database_error_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
+    request.app.state.db_status = "error"
+    log.exception("Database error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=503, content={"detail": "Database temporarily unavailable. Retry shortly."})
+
+
+def create_app(database_url: str | None = None) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        url = database_url or os.environ.get("DATABASE_URL")
+        if not url:
+            raise RuntimeError(
+                "DATABASE_URL no está definida. En Render: Environment -> DATABASE_URL. "
+                "En local: export DATABASE_URL=sqlite:///./local.db"
+            )
+        app.state.engine = db.make_engine(url)
+        db.init_db(app.state.engine)
+        try:
+            app.state.cache.ensure_loaded(app.state.engine)
+            app.state.db_status = "ok"
+        except SQLAlchemyError:
+            log.exception("Could not preload latest samples; will retry on first /robots")
+            app.state.db_status = "error"
+        yield
+        app.state.engine.dispose()
+
+    app = FastAPI(
+        title="ACI606 Cloud Fleet Challenge",
+        version=VERSION,
+        description="Telemetría persistente, inferencia y métricas para una flota virtual de robots.",
+        lifespan=lifespan,
+    )
+    app.state.cache = db.LatestCache()
+    app.state.db_status = "unknown"
+    app.state.telemetry_count = 0
+    app.add_exception_handler(RequestValidationError, validation_error_handler)
+    app.add_exception_handler(SQLAlchemyError, database_error_handler)
+    app.include_router(router)
+    return app
+
+
+app = create_app()
