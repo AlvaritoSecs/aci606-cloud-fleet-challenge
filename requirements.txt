@@ -1,10 +1,11 @@
-fastapi
-uvicorn[standard]
-requests
+# Versiones probadas juntas (pytest + simulador contra PostgreSQL, 29-10-2026).
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+requests==2.34.2
 # Persistencia en PostgreSQL (Neon) con el driver psycopg 3.
-sqlalchemy>=2.0,<2.1
-psycopg[binary]>=3.2,<4
-# Fijadas: models/model.joblib se entrenó con estas versiones (ver models/model_meta.json).
+sqlalchemy==2.0.55
+psycopg[binary]==3.3.6
+# models/model.joblib se entrenó con estas versiones (ver models/model_meta.json).
 # Un modelo de scikit-learn cargado con otra versión puede fallar o predecir distinto.
 numpy==2.5.3
 pandas==3.0.5
