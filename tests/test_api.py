@@ -8,11 +8,14 @@ Cubren los criterios de aceptación de la Fase 1:
 from __future__ import annotations
 
 import json
+import os
 import time
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
+from app import db
 from app.main import create_app
 
 SAMPLE = {
@@ -25,7 +28,19 @@ FIELDS = list(SAMPLE)
 
 @pytest.fixture()
 def db_url(tmp_path):
-    return f"sqlite:///{tmp_path / 'test.db'}"
+    """SQLite temporal por defecto. Con TEST_DATABASE_URL se prueba contra PostgreSQL real.
+
+    ¡Ojo! Con TEST_DATABASE_URL la tabla `telemetry` se BORRA antes de cada prueba:
+    usa una base o rama de pruebas, nunca la de producción.
+    """
+    url = os.environ.get("TEST_DATABASE_URL")
+    if not url:
+        return f"sqlite:///{tmp_path / 'test.db'}"
+    engine = db.make_engine(url)
+    with engine.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS telemetry"))
+    engine.dispose()
+    return url
 
 
 @pytest.fixture()
@@ -43,7 +58,7 @@ def test_health(client):
     r = client.get("/health")
     assert r.status_code == 200
     body = r.json()
-    assert body["status"] == "ok" and body["persistence"] == "SQLITE"
+    assert body["status"] == "ok" and body["persistence"] in {"SQLITE", "POSTGRESQL"}
 
 
 def test_ingest_keeps_starter_response_keys(client):
