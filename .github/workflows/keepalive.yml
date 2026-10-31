@@ -1,0 +1,23 @@
+# Mantiene despierto el servicio de Render (plan gratuito: se suspende tras 15 min sin tráfico).
+# El PDF exige que el docente pueda consumir el servicio "sin intervención del grupo"; con el
+# servicio dormido, la primera solicitud tarda ~1 min y un cliente con timeout corto fallaría.
+#
+# Solo llama GET /health, que NO consulta la base de datos: no gasta la cuota de Neon.
+# Costo: un servicio despierto todo el mes usa ~744 de las 750 h gratuitas de Render.
+# GitHub puede retrasar las ejecuciones programadas unos minutos; por eso corre cada 10 min.
+name: keep-alive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: GET /health
+        run: |
+          curl --fail --silent --show-error --max-time 120 --retry 3 --retry-delay 10 \
+            https://aci606-cloud-fleet.onrender.com/health
