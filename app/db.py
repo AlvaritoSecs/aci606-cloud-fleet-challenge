@@ -106,9 +106,11 @@ def insert_sample(engine: Engine, sample: dict, prediction: dict | None = None) 
 
 
 def fetch_latest(engine: Engine) -> list[dict]:
-    """Última muestra recibida de cada robot (la de mayor id)."""
-    last = select(func.max(telemetry.c.id).label("id")).group_by(telemetry.c.robot_id).subquery()
-    stmt = select(telemetry).join(last, telemetry.c.id == last.c.id).order_by(telemetry.c.robot_id)
+    """Última muestra recibida de cada robot (la de mayor id) y cuántos registros tiene en total."""
+    last = (select(func.max(telemetry.c.id).label("id"), func.count().label("records"))
+            .group_by(telemetry.c.robot_id).subquery())
+    stmt = (select(telemetry, last.c.records)
+            .join(last, telemetry.c.id == last.c.id).order_by(telemetry.c.robot_id))
     with engine.connect() as conn:
         return [_row(r) for r in conn.execute(stmt).mappings()]
 
@@ -140,6 +142,8 @@ class LatestCache:
 
     def __init__(self) -> None:
         self._data: dict[str, dict] = {}
+        self._counts: dict[str, int] = {}      # registros guardados por robot
+        self._early: dict[str, list[int]] = {}  # ids guardados antes de cargar desde la base
         self._loaded = False
         self._lock = threading.Lock()
 
@@ -152,14 +156,28 @@ class LatestCache:
             return
         rows = fetch_latest(engine)
         with self._lock:
+            if self._loaded:
+                return
             for row in rows:
-                current = self._data.get(row["robot_id"])
+                rid = row["robot_id"]
+                db_count = int(row.pop("records"))
+                # Muestras guardadas mientras corría la consulta: se suman solo si la consulta no las vio.
+                self._counts[rid] = db_count + sum(1 for i in self._early.get(rid, []) if i > row["id"])
+                current = self._data.get(rid)
                 if current is None or row["id"] > current["id"]:
-                    self._data[row["robot_id"]] = row
+                    self._data[rid] = row
+            for rid, ids in self._early.items():
+                self._counts.setdefault(rid, len(ids))
+            self._early.clear()
             self._loaded = True
 
     def update(self, row: dict) -> None:
         with self._lock:
+            rid = row["robot_id"]
+            if self._loaded:
+                self._counts[rid] = self._counts.get(rid, 0) + 1
+            else:
+                self._early.setdefault(rid, []).append(row["id"])
             current = self._data.get(row["robot_id"])
             if current is None or row["id"] > current["id"]:
                 self._data[row["robot_id"]] = row
@@ -167,7 +185,9 @@ class LatestCache:
     def all(self) -> list[dict]:
         with self._lock:
             rows = sorted(self._data.values(), key=lambda r: r["robot_id"])
-        return [{k: v for k, v in r.items() if k != "id"} for r in rows]
+            counts = dict(self._counts)
+        return [{**{k: v for k, v in r.items() if k != "id"}, "records": counts.get(r["robot_id"])}
+                for r in rows]
 
     def __len__(self) -> int:
         return len(self._data)

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from app import db
@@ -127,6 +127,12 @@ def metrics(request: Request) -> dict:
         **state.metrics.snapshot(),
         "note": "Counters reset when the service restarts; telemetry is persisted in the database.",
     }
+
+
+@router.get("/", include_in_schema=False)
+def home() -> RedirectResponse:
+    # La dirección principal lleva directo al panel.
+    return RedirectResponse(url="/dashboard")
 
 
 @router.get("/dashboard", response_class=HTMLResponse)

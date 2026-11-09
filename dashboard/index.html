@@ -3,269 +3,600 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ACI606 Cloud Fleet Dashboard</title>
+  <title>Cloud Fleet · Centro de operación</title>
   <style>
     :root {
       color-scheme: dark;
       font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
-      --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #e6edf3; --muted: #8b949e;
-      --normal: #3fb950; --warning: #d29922; --critical: #f85149; --accent: #58a6ff; --none: #6e7681;
+      --bg: #0b0f16; --panel: #131a24; --panel2: #18212e; --line: #263142; --text: #e6edf3; --muted: #8b98a9;
+      --normal: #3fb950; --warning: #d8a32b; --critical: #f0524a; --accent: #4f9cf9; --none: #6e7681;
     }
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--text); }
-    header { padding: 18px 24px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
-    h1 { margin: 0; font-size: 20px; }
-    h2 { margin: 0 0 12px; font-size: 15px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-    .tag { color: var(--muted); font-size: 13px; }
-    main { padding: 20px 24px 40px; display: grid; gap: 24px; }
-    .pills { display: flex; flex-wrap: wrap; gap: 8px; }
-    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px; font-size: 13px; }
+    a { color: var(--accent); }
+    button { font: inherit; }
+
+    /* Barra superior y pestañas */
+    .top { position: sticky; top: 0; z-index: 10; background: rgba(11,15,22,.94); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+    .top-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; padding: 12px 24px 8px; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .logo { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), #7b61ff); display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+    .brand h1 { margin: 0; font-size: 17px; }
+    .brand span { color: var(--muted); font-size: 12px; }
+    .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 99px; font-size: 12px; color: var(--muted); }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--none); }
     .ok .dot { background: var(--normal); } .bad .dot { background: var(--critical); } .warn .dot { background: var(--warning); }
-    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    .ok, .bad, .warn { color: var(--text); }
+    nav { display: flex; gap: 2px; padding: 0 16px; overflow-x: auto; scrollbar-width: none; }
+    nav::-webkit-scrollbar { display: none; }
+    nav a { flex: none; color: var(--muted); text-decoration: none; padding: 10px 14px; border-bottom: 2px solid transparent; font-size: 14px; font-weight: 600; }
+    nav a:hover { color: var(--text); }
+    nav a.active { color: var(--text); border-bottom-color: var(--accent); }
+    nav a .k { display: inline-block; margin-left: 6px; font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+
+    main { padding: 20px 24px 48px; max-width: 1280px; margin: 0 auto; }
+    section.view { display: none; }
+    section.view.active { display: block; }
+    h2 { font-size: 20px; margin: 0 0 4px; }
+    .lead { color: var(--muted); margin: 0 0 18px; font-size: 14px; max-width: 760px; }
+    h3 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 22px 0 10px; }
+
+    .grid { display: grid; gap: 12px; }
+    .kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
     .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
-    .kpi .v { font-size: 26px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
-    .kpi .l { color: var(--muted); font-size: 13px; }
-    .kpi.normal .v { color: var(--normal); } .kpi.warning .v { color: var(--warning); } .kpi.critical .v { color: var(--critical); }
-    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
-    .card { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--none); border-radius: 12px; padding: 14px 16px; cursor: pointer; text-align: left; color: inherit; font: inherit; width: 100%; }
+    .kpi .l { color: var(--muted); font-size: 12.5px; }
+    .kpi .v { font-size: 26px; font-weight: 750; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .kpi .s { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .kpi.NORMAL .v { color: var(--normal); } .kpi.WARNING .v { color: var(--warning); } .kpi.CRITICAL .v { color: var(--critical); }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+    .row2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+    @media (max-width: 900px) { .row2 { grid-template-columns: 1fr; } }
+
+    /* Tarjetas de robots */
+    .cards { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+    .card { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--none); border-radius: 12px; padding: 14px 16px; cursor: pointer; text-align: left; color: inherit; width: 100%; }
     .card:hover, .card:focus-visible { border-color: var(--accent); outline: none; }
-    .card.selected { box-shadow: 0 0 0 2px var(--accent); }
     .card.NORMAL { border-left-color: var(--normal); } .card.WARNING { border-left-color: var(--warning); } .card.CRITICAL { border-left-color: var(--critical); }
-    .card.stale { opacity: .55; }
-    .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
-    .robot { font-size: 18px; font-weight: 700; overflow-wrap: anywhere; }
-    .badge { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px; background: #21262d; white-space: nowrap; }
+    .card.stale { opacity: .5; }
+    .ctop { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .robot { font-size: 18px; font-weight: 750; overflow-wrap: anywhere; }
+    .badge { font-size: 12px; font-weight: 750; padding: 3px 8px; border-radius: 6px; background: #1f2835; white-space: nowrap; }
     .badge.NORMAL { color: var(--normal); } .badge.WARNING { color: var(--warning); } .badge.CRITICAL { color: var(--critical); } .badge.NONE { color: var(--muted); }
-    .row { display: flex; justify-content: space-between; padding: 3px 0; color: #c9d1d9; font-size: 14px; font-variant-numeric: tabular-nums; }
-    .row span:first-child { color: var(--muted); }
-    .bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 4px 0 8px; }
+    .kv { display: flex; justify-content: space-between; padding: 2px 0; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+    .kv span:first-child { color: var(--muted); }
+    .bar { height: 7px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 3px 0 7px; }
     .fill { height: 100%; background: var(--accent); }
     .fill.low { background: var(--critical); }
-    .seen { font-size: 12px; color: var(--muted); margin-top: 6px; }
-    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-    .hist-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; margin-bottom: 8px; }
+    .foot { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 8px; border-top: 1px solid var(--line); padding-top: 7px; }
+    .foot b { color: var(--text); }
+    .empty { padding: 30px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; }
+
+    /* Controles */
+    select, input { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 14px; }
+    .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 13.5px; font-weight: 600; }
+    .btn:hover { border-color: var(--accent); }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #06101f; }
+    .btn.danger { border-color: #5b2a2a; color: #ff9b94; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+
     svg { width: 100%; height: auto; display: block; }
-    .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
     .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
-    .empty { padding: 32px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; }
-    @media (max-width: 600px) { header, main { padding-left: 16px; padding-right: 16px; } .kpi .v { font-size: 22px; } }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+    th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+    tr.hi td { background: rgba(79,156,249,.08); font-weight: 650; }
+
+    /* Probar modelo */
+    .form { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+    .form label { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
+    .form input { width: 100%; min-width: 0; }
+    .form input:disabled { opacity: .35; text-decoration: line-through; }
+    .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+    .result { min-height: 220px; display: grid; align-content: start; gap: 10px; }
+    .big { font-size: 34px; font-weight: 800; letter-spacing: .02em; }
+    .big.NORMAL { color: var(--normal); } .big.WARNING { color: var(--warning); } .big.CRITICAL { color: var(--critical); } .big.ERR { color: var(--critical); font-size: 26px; }
+    pre { background: #0a0e14; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 12.5px; overflow-x: auto; margin: 0; white-space: pre-wrap; word-break: break-word; }
+    .code { display: inline-block; font-weight: 750; padding: 2px 8px; border-radius: 6px; font-size: 13px; }
+    .code.c2 { background: rgba(63,185,80,.15); color: var(--normal); } .code.c4 { background: rgba(216,163,43,.15); color: var(--warning); } .code.c5 { background: rgba(240,82,74,.15); color: var(--critical); }
+    .note { font-size: 13px; color: var(--muted); }
+
+    /* Modelo */
+    .cm { display: grid; grid-template-columns: 110px repeat(3, 1fr); gap: 4px; font-size: 13px; }
+    .cm div { padding: 10px 6px; text-align: center; border-radius: 6px; }
+    .cm .h { color: var(--muted); font-size: 12px; background: none; }
+    .cm .c { font-variant-numeric: tabular-nums; }
+    .cm .c b { display: block; font-size: 16px; }
+    .meter { display: grid; grid-template-columns: 170px 1fr 54px; align-items: center; gap: 10px; margin: 8px 0; font-size: 13.5px; }
+    .meter .track { height: 14px; background: var(--line); border-radius: 99px; overflow: hidden; }
+    .meter .track div { height: 100%; border-radius: 99px; }
+    ul.clean { margin: 6px 0; padding-left: 18px; color: #c9d4e0; font-size: 14px; line-height: 1.55; }
+
+    @media (max-width: 600px) { .top-row, main { padding-left: 16px; padding-right: 16px; } nav { padding: 0 8px; } .kpi .v { font-size: 22px; } .cm { grid-template-columns: 80px repeat(3, 1fr); } .meter { grid-template-columns: 110px 1fr 46px; } }
   </style>
 </head>
 <body>
-<header>
-  <div>
-    <h1>Cloud Fleet Dashboard</h1>
-    <div class="tag">ACI606 · telemetría persistente e inferencia en la nube</div>
+<header class="top">
+  <div class="top-row">
+    <div class="brand">
+      <div class="logo">CF</div>
+      <div><h1>Cloud Fleet</h1><span>Centro de operación · ACI606</span></div>
+    </div>
+    <div class="pills" aria-live="polite">
+      <span id="p-api" class="pill"><span class="dot"></span><span>API</span></span>
+      <span id="p-db" class="pill"><span class="dot"></span><span>Base de datos</span></span>
+      <span id="p-model" class="pill"><span class="dot"></span><span>Modelo</span></span>
+      <span id="p-up" class="pill">encendido —</span>
+    </div>
   </div>
-  <div class="pills" aria-live="polite">
-    <span id="p-api" class="pill"><span class="dot"></span><span>API: …</span></span>
-    <span id="p-db" class="pill"><span class="dot"></span><span>Base de datos: …</span></span>
-    <span id="p-model" class="pill"><span class="dot"></span><span>Modelo: …</span></span>
-    <span id="p-updated" class="pill tag">actualizando…</span>
-  </div>
+  <nav aria-label="Secciones">
+    <a href="#flota" data-view="flota">Flota<span class="k">1</span></a>
+    <a href="#robot" data-view="robot">Robot<span class="k">2</span></a>
+    <a href="#probar" data-view="probar">Probar modelo<span class="k">3</span></a>
+    <a href="#metricas" data-view="metricas">Métricas<span class="k">4</span></a>
+    <a href="#modelo" data-view="modelo">Modelo ML<span class="k">5</span></a>
+    <a href="#arquitectura" data-view="arquitectura">Arquitectura<span class="k">6</span></a>
+  </nav>
 </header>
+
 <main>
-  <section aria-label="Resumen de la flota">
-    <h2>Flota</h2>
-    <div class="kpis">
-      <div class="kpi"><div class="l">Robots conectados</div><div class="v" id="k-connected">–</div><div class="l" id="k-known"></div></div>
-      <div class="kpi normal"><div class="l">NORMAL</div><div class="v" id="k-NORMAL">–</div></div>
-      <div class="kpi warning"><div class="l">WARNING</div><div class="v" id="k-WARNING">–</div></div>
-      <div class="kpi critical"><div class="l">CRITICAL</div><div class="v" id="k-CRITICAL">–</div></div>
+  <!-- 1. FLOTA -->
+  <section class="view" id="v-flota">
+    <h2>Flota en vivo</h2>
+    <p class="lead">Último dato de cada robot y su estado predicho por el modelo. Se actualiza cada 2 segundos. Toca un robot para ver su historial.</p>
+    <div class="grid kpis">
+      <div class="kpi"><div class="l">Robots conectados</div><div class="v" id="k-connected">–</div><div class="s" id="k-known">enviaron datos en los últimos 15 s</div></div>
+      <div class="kpi NORMAL"><div class="l">NORMAL</div><div class="v" id="k-NORMAL">–</div></div>
+      <div class="kpi WARNING"><div class="l">WARNING</div><div class="v" id="k-WARNING">–</div></div>
+      <div class="kpi CRITICAL"><div class="l">CRITICAL</div><div class="v" id="k-CRITICAL">–</div></div>
+      <div class="kpi"><div class="l">Registros guardados</div><div class="v" id="k-records">–</div><div class="s">en Neon (PostgreSQL), todos los robots</div></div>
+    </div>
+    <h3>Robots</h3>
+    <div id="cards" class="grid cards"></div>
+  </section>
+
+  <!-- 2. ROBOT -->
+  <section class="view" id="v-robot">
+    <h2>Historial de un robot</h2>
+    <p class="lead">El historial completo se guarda en la base de datos y sobrevive a los reinicios. Aquí se dibujan las últimas muestras.</p>
+    <div class="toolbar">
+      <label class="note">Robot <select id="r-select"></select></label>
+      <label class="note">Muestras <select id="r-limit"><option>50</option><option selected>150</option><option>500</option></select></label>
+      <a class="btn" id="r-raw" target="_blank" rel="noopener">Ver JSON del historial completo ↗</a>
+    </div>
+    <div class="grid kpis" id="r-kpis"></div>
+    <div class="panel" style="margin-top:14px">
+      <div id="r-chart"><div class="empty">Elige un robot.</div></div>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--critical)"></span>Temperatura del motor (°C, eje izquierdo)</span>
+        <span><span class="sw" style="background:var(--accent)"></span>Vibración (eje derecho)</span>
+        <span><span class="sw" style="background:var(--normal)"></span><span class="sw" style="background:var(--warning)"></span><span class="sw" style="background:var(--critical)"></span>Estado predicho en cada muestra</span>
+      </div>
+    </div>
+    <h3>Últimas 10 muestras</h3>
+    <div class="panel" style="overflow-x:auto"><table id="r-table"></table></div>
+  </section>
+
+  <!-- 3. PROBAR MODELO -->
+  <section class="view" id="v-probar">
+    <h2>Probar el modelo</h2>
+    <p class="lead">Envía una muestra a <code>POST /predict</code>, la misma ruta que usa el evaluador. Los ejemplos de abajo cargan valores típicos; los tres últimos son datos inválidos, que deben responder 422 sin romper el servicio.</p>
+    <div class="presets">
+      <button class="btn" data-preset="sano">🟢 Robot sano</button>
+      <button class="btn" data-preset="alerta">🟡 Robot con alerta</button>
+      <button class="btn" data-preset="critico">🔴 Robot crítico</button>
+      <button class="btn danger" data-preset="bateria">Batería 150 %</button>
+      <button class="btn danger" data-preset="nan">Vibración = NaN</button>
+      <button class="btn danger" data-preset="falta">Falta un campo</button>
+    </div>
+    <div class="row2">
+      <div class="panel">
+        <div class="form" id="p-form"></div>
+        <div class="toolbar" style="margin:14px 0 0"><button class="btn primary" id="p-send">Predecir</button><span class="note" id="p-hint"></span></div>
+      </div>
+      <div class="panel result" id="p-result"><div class="empty">Elige un ejemplo o completa los valores y presiona <b>Predecir</b>.</div></div>
     </div>
   </section>
 
-  <section aria-label="Servicio">
-    <h2>Servicio</h2>
-    <div class="kpis">
-      <div class="kpi"><div class="l">Telemetrías recibidas</div><div class="v" id="m-tel">–</div><div class="l">desde el último arranque</div></div>
-      <div class="kpi"><div class="l">Predicciones /predict</div><div class="v" id="m-pred">–</div><div class="l" id="m-avg"></div></div>
-      <div class="kpi"><div class="l">Latencia /predict P50 · P95</div><div class="v" id="m-lat">–</div><div class="l">ms, medida en el servidor</div></div>
-      <div class="kpi"><div class="l">Errores 4xx · 5xx</div><div class="v" id="m-err">–</div><div class="l">4xx = datos rechazados</div></div>
-      <div class="kpi"><div class="l">Tiempo encendido</div><div class="v" id="m-up">–</div><div class="l" id="m-started"></div></div>
+  <!-- 4. MÉTRICAS -->
+  <section class="view" id="v-metricas">
+    <h2>Métricas del servicio</h2>
+    <p class="lead">Lo que expone <code>GET /metrics</code>, en formato legible. Los contadores viven en memoria y vuelven a cero cuando el servicio se reinicia; los datos de los robots no, porque están en la base. <a href="/metrics" target="_blank" rel="noopener">Ver JSON ↗</a></p>
+    <div class="grid kpis" id="m-kpis"></div>
+    <div class="row2" style="margin-top:14px">
+      <div class="panel">
+        <h3 style="margin-top:0">Latencia de /predict (ms, medida en el servidor)</h3>
+        <div id="m-lat"></div>
+        <p class="note">P50: la mitad de las predicciones fue más rápida. P95: el 95 % fue más rápida. Desde un cliente externo se suma el tiempo de red.</p>
+      </div>
+      <div class="panel">
+        <h3 style="margin-top:0">Predicciones por estado</h3>
+        <div id="m-classes"></div>
+      </div>
+    </div>
+    <h3>Solicitudes por ruta y código HTTP</h3>
+    <div class="panel" style="overflow-x:auto"><table id="m-routes"></table></div>
+  </section>
+
+  <!-- 5. MODELO -->
+  <section class="view" id="v-modelo">
+    <h2>Modelo de Machine Learning</h2>
+    <p class="lead">Regresión logística entrenada con 30 flotas del simulador y evaluada en 10 flotas que nunca vio, con otra cantidad de robots y otra duración.</p>
+    <div class="grid kpis" id="ml-kpis"></div>
+    <div class="row2" style="margin-top:14px">
+      <div class="panel">
+        <h3 style="margin-top:0">F1 macro en flotas nunca vistas</h3>
+        <div class="meter"><span>Nuestro modelo</span><div class="track"><div style="width:92.3%;background:var(--normal)"></div></div><b>0,923</b></div>
+        <div class="meter"><span>Siempre "CRITICAL"</span><div class="track"><div style="width:29.7%;background:var(--none)"></div></div><b>0,297</b></div>
+        <p class="note">F1 macro evalúa cada estado por separado y los promedia. Como el 74 % de los datos es CRITICAL, decir siempre CRITICAL da 76 % de aciertos, pero solo 0,297 de F1 macro.</p>
+        <h3>F1 por estado (flotas nunca vistas)</h3>
+        <div class="meter"><span>NORMAL</span><div class="track"><div style="width:94.1%;background:var(--normal)"></div></div><b>0,941</b></div>
+        <div class="meter"><span>WARNING</span><div class="track"><div style="width:84.6%;background:var(--warning)"></div></div><b>0,846</b></div>
+        <div class="meter"><span>CRITICAL</span><div class="track"><div style="width:98.4%;background:var(--critical)"></div></div><b>0,984</b></div>
+      </div>
+      <div class="panel">
+        <h3 style="margin-top:0">Matriz de confusión (flotas nunca vistas)</h3>
+        <div class="cm" id="ml-cm"></div>
+        <p class="note">Filas: estado real. Columnas: lo que predijo el modelo. Nunca confunde NORMAL con CRITICAL; sus errores son entre estados vecinos.</p>
+      </div>
+    </div>
+    <h3>Comparación de modelos (separación por flota)</h3>
+    <div class="panel" style="overflow-x:auto">
+      <table>
+        <tr><th>Modelo</th><th>Variables</th><th>F1 validación cruzada</th><th>F1 flotas de prueba</th></tr>
+        <tr><td>Línea base: siempre CRITICAL</td><td>—</td><td>0,282</td><td>0,287</td></tr>
+        <tr><td>Regresión logística</td><td>6</td><td>0,923</td><td>0,933</td></tr>
+        <tr class="hi"><td>Regresión logística (elegido)</td><td>4</td><td>0,922</td><td>0,932</td></tr>
+        <tr><td>Gradient Boosting</td><td>6</td><td>0,922</td><td>0,930</td></tr>
+        <tr><td>Random Forest</td><td>6</td><td>0,920</td><td>0,929</td></tr>
+      </table>
+      <p class="note">Los tres modelos empatan. La regla, fijada antes de ver los resultados, elige el más simple. Usa 4 sensores: velocidad, temperatura, vibración y corriente. La batería se descartó porque baja con el tiempo, no por falla; la distancia al obstáculo es ruido en el simulador.</p>
+    </div>
+    <h3>Cómo se evaluó</h3>
+    <div class="panel">
+      <ul class="clean">
+        <li><b>Separación por flota</b> (<code>GroupShuffleSplit</code> por <code>fleet_id</code>): las muestras seguidas de un robot son casi iguales; mezclarlas al azar inflaría la nota (fuga de datos).</li>
+        <li><b>Elección</b> con validación cruzada por flota (<code>GroupKFold</code>, 5 pliegues), solo sobre las flotas de entrenamiento.</li>
+        <li><b>Prueba final</b> en 10 flotas reservadas desde el inicio, nunca usadas para decidir nada.</li>
+        <li><b>Reproducible</b>: semillas fijas; volver a entrenar da exactamente los mismos números.</li>
+      </ul>
     </div>
   </section>
 
-  <section aria-label="Robots">
-    <h2>Robots <span class="tag">· toca un robot para ver su historial</span></h2>
-    <div id="cards" class="cards"></div>
-  </section>
-
-  <section aria-label="Historial" class="panel">
-    <div class="hist-head">
-      <h2 id="h-title" style="margin:0">Historial</h2>
-      <span class="tag" id="h-info">Selecciona un robot.</span>
+  <!-- 6. ARQUITECTURA -->
+  <section class="view" id="v-arquitectura">
+    <h2>Arquitectura</h2>
+    <p class="lead">Render ejecuta el código, Neon guarda los datos y GitHub guarda el código y dispara cada despliegue.</p>
+    <div class="panel">
+      <svg viewBox="0 0 900 330" role="img" aria-label="Clientes, Render, Neon y GitHub">
+        <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8b98a9"/></marker></defs>
+        <g fill="none" stroke="#8b98a9" stroke-width="1.4">
+          <path d="M200 110H282" marker-start="url(#arr)" marker-end="url(#arr)"/>
+          <path d="M598 110H680" marker-start="url(#arr)" marker-end="url(#arr)"/>
+          <path d="M440 268V218" marker-end="url(#arr)"/>
+        </g>
+        <text x="241" y="98" text-anchor="middle" fill="#8b98a9" font-size="12">HTTPS</text>
+        <text x="639" y="98" text-anchor="middle" fill="#8b98a9" font-size="12">SQL + TLS</text>
+        <text x="452" y="248" fill="#8b98a9" font-size="12">despliegue automático en cada merge a main</text>
+        <rect x="20" y="50" width="180" height="120" rx="10" fill="#131a24" stroke="#263142"/>
+        <text x="36" y="78" fill="#e6edf3" font-size="15" font-weight="700">Clientes</text>
+        <text x="36" y="102" fill="#c9d4e0" font-size="13">Simulador de flota</text>
+        <text x="36" y="122" fill="#c9d4e0" font-size="13">Este panel</text>
+        <text x="36" y="142" fill="#c9d4e0" font-size="13">Evaluador del profesor</text>
+        <rect x="282" y="30" width="316" height="188" rx="10" fill="rgba(79,156,249,.08)" stroke="#4f9cf9" stroke-width="2"/>
+        <text x="300" y="58" fill="#e6edf3" font-size="15" font-weight="700">Render · Web Service (PaaS)</text>
+        <text x="300" y="84" fill="#c9d4e0" font-size="13">FastAPI + Uvicorn</text>
+        <text x="300" y="106" fill="#c9d4e0" font-size="13">1. Valida (datos malos → 422)</text>
+        <text x="300" y="128" fill="#c9d4e0" font-size="13">2. Modelo en memoria (model.joblib)</text>
+        <text x="300" y="150" fill="#c9d4e0" font-size="13">3. Guarda en Neon con su predicción</text>
+        <text x="300" y="172" fill="#c9d4e0" font-size="13">4. Métricas y este panel</text>
+        <text x="300" y="200" fill="#8b98a9" font-size="12">disco efímero: se borra al reiniciar</text>
+        <rect x="680" y="50" width="200" height="120" rx="10" fill="#131a24" stroke="#263142"/>
+        <text x="696" y="78" fill="#e6edf3" font-size="15" font-weight="700">Neon · PostgreSQL</text>
+        <text x="696" y="102" fill="#c9d4e0" font-size="13">tabla telemetry</text>
+        <text x="696" y="122" fill="#c9d4e0" font-size="13">historial completo</text>
+        <text x="696" y="142" fill="#c9d4e0" font-size="13">sobrevive a reinicios</text>
+        <rect x="350" y="268" width="180" height="44" rx="10" fill="#131a24" stroke="#263142"/>
+        <text x="440" y="295" text-anchor="middle" fill="#e6edf3" font-size="14" font-weight="700">GitHub (main)</text>
+      </svg>
     </div>
-    <div id="h-chart"></div>
-    <div class="legend">
-      <span><span class="sw" style="background:var(--critical)"></span>Temperatura del motor (°C)</span>
-      <span><span class="sw" style="background:var(--accent)"></span>Vibración</span>
-      <span><span class="sw" style="background:var(--normal)"></span><span class="sw" style="background:var(--warning)"></span><span class="sw" style="background:var(--critical)"></span>Estado predicho en cada muestra</span>
+    <div class="row2" style="margin-top:14px">
+      <div class="panel">
+        <h3 style="margin-top:0">Decisiones y por qué</h3>
+        <ul class="clean">
+          <li><b>Datos en Neon, no en Render:</b> el disco de Render se borra en cada reinicio o despliegue.</li>
+          <li><b>Neon y no la base de Render:</b> la base gratuita de Render expira a los 30 días.</li>
+          <li><b>Contraseña en una variable de entorno</b> (<code>DATABASE_URL</code>), nunca en el código ni en GitHub.</li>
+          <li><b><code>pool_pre_ping</code>:</b> Neon se suspende a los 5 minutos y corta las conexiones; se revisan antes de usarlas.</li>
+          <li><b><code>/predict</code> no usa la base:</b> su velocidad no depende de Neon.</li>
+          <li><b>Despertador:</b> un GitHub Action visita <code>/health</code> cada 10 minutos para que Render no se duerma.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3 style="margin-top:0">Enlaces</h3>
+        <ul class="clean">
+          <li><a href="https://github.com/AlvaritoSecs/aci606-cloud-fleet-challenge" target="_blank" rel="noopener">Repositorio en GitHub ↗</a></li>
+          <li><a href="/docs" target="_blank" rel="noopener">Documentación interactiva de la API (/docs) ↗</a></li>
+          <li><a href="/health" target="_blank" rel="noopener">/health ↗</a> · <a href="/robots" target="_blank" rel="noopener">/robots ↗</a> · <a href="/metrics" target="_blank" rel="noopener">/metrics ↗</a></li>
+        </ul>
+        <h3>Rutas de la API</h3>
+        <table>
+          <tr><td><code>GET /health</code></td><td>Estado del servicio</td></tr>
+          <tr><td><code>POST /telemetry</code></td><td>Recibe y guarda una muestra</td></tr>
+          <tr><td><code>GET /robots</code></td><td>Último dato de cada robot</td></tr>
+          <tr><td><code>GET /robots/{id}/history</code></td><td>Historial completo</td></tr>
+          <tr><td><code>POST /predict</code></td><td>Estado predicho</td></tr>
+          <tr><td><code>GET /metrics</code></td><td>Métricas del servicio</td></tr>
+          <tr><td><code>GET /dashboard</code></td><td>Este panel</td></tr>
+        </table>
+      </div>
     </div>
   </section>
 </main>
+
 <script>
-const STALE_SECONDS = 15;     // sin telemetría en este tiempo = robot desconectado
-const HISTORY_POINTS = 150;   // muestras que dibuja el gráfico
+const STALE_SECONDS = 15;
 const STATES = ['NORMAL', 'WARNING', 'CRITICAL'];
+const COLORS = {NORMAL: 'var(--normal)', WARNING: 'var(--warning)', CRITICAL: 'var(--critical)'};
+const VIEWS = ['flota', 'robot', 'probar', 'metricas', 'modelo', 'arquitectura'];
 const $ = (id) => document.getElementById(id);
+let robots = [];
 let selected = null;
-let lastRobots = [];
+let view = 'flota';
 
 // Todo texto que viene de la API se escapa antes de insertarlo en el HTML.
-function esc(value) {
-  return String(value ?? '').replace(/[&<>"']/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-}
-function num(value, digits) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n.toFixed(digits) : '–';
-}
-function ageSeconds(iso) {
-  const t = Date.parse(iso);
-  return Number.isFinite(t) ? Math.max(0, (Date.now() - t) / 1000) : Infinity;
-}
-function fmtAge(s) {
-  if (!Number.isFinite(s)) return 'sin datos';
-  if (s < 60) return `hace ${Math.round(s)} s`;
-  if (s < 3600) return `hace ${Math.round(s / 60)} min`;
-  return `hace ${Math.round(s / 3600)} h`;
-}
-function fmtUptime(s) {
-  s = Math.floor(Number(s) || 0);
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-  return h ? `${h} h ${m} min` : m ? `${m} min ${s % 60} s` : `${s} s`;
-}
-function setPill(id, cls, text) {
-  const el = $(id);
-  el.className = `pill ${cls}`;
-  el.lastElementChild.textContent = text;
-}
+function esc(v) { return String(v ?? '').replace(/[&<>"']/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c])); }
+function num(v, d) { const n = Number(v); return Number.isFinite(n) ? n.toFixed(d) : '–'; }
+function int(v) { const n = Number(v); return Number.isFinite(n) ? n.toLocaleString('es-CL') : '–'; }
+function age(iso) { const t = Date.parse(iso); return Number.isFinite(t) ? Math.max(0, (Date.now() - t) / 1000) : Infinity; }
+function fmtAge(s) { if (!Number.isFinite(s)) return 'sin datos'; if (s < 60) return `hace ${Math.round(s)} s`; if (s < 3600) return `hace ${Math.round(s / 60)} min`; return `hace ${Math.round(s / 3600)} h`; }
+function fmtUp(s) { s = Math.floor(Number(s) || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? `${h} h ${m} min` : m ? `${m} min ${s % 60} s` : `${s} s`; }
+function stateOf(r) { return STATES.includes(r?.predicted_status) ? r.predicted_status : 'NONE'; }
+function setPill(id, cls, text) { const el = $(id); el.className = `pill ${cls}`; el.lastElementChild.textContent = text; }
+async function getJSON(url) { const r = await fetch(url, {cache: 'no-store'}); if (!r.ok) throw new Error(`${url} -> ${r.status}`); return r.json(); }
 
-function card(r) {
-  const status = STATES.includes(r.predicted_status) ? r.predicted_status : 'NONE';
-  const label = status === 'NONE' ? 'SIN PREDICCIÓN' : status;
-  const battery = Math.max(0, Math.min(100, Number(r.battery) || 0));
-  const age = ageSeconds(r.received_at);
-  const stale = age > STALE_SECONDS;
-  const conf = Number.isFinite(Number(r.confidence)) ? ` · ${Math.round(r.confidence * 100)} %` : '';
-  const id = esc(r.robot_id);
-  return `<button class="card ${status}${stale ? ' stale' : ''}${r.robot_id === selected ? ' selected' : ''}" data-id="${id}" aria-pressed="${r.robot_id === selected}">
-    <div class="top"><span class="robot">${id}</span><span class="badge ${status}">${label}${conf}</span></div>
-    <div class="row"><span>Batería</span><span>${battery.toFixed(1)} %</span></div>
-    <div class="bar"><div class="fill${battery < 20 ? ' low' : ''}" style="width:${battery}%"></div></div>
-    <div class="row"><span>Temp. motor</span><span>${num(r.motor_temp, 1)} °C</span></div>
-    <div class="row"><span>Vibración</span><span>${num(r.vibration, 2)}</span></div>
-    <div class="row"><span>Corriente</span><span>${num(r.motor_current, 2)} A</span></div>
-    <div class="row"><span>Velocidad</span><span>${num(r.speed, 2)} m/s</span></div>
-    <div class="row"><span>Obstáculo</span><span>${num(r.obstacle_distance, 2)} m</span></div>
-    <div class="seen">${stale ? 'Desconectado · ' : ''}última telemetría ${fmtAge(age)}</div>
-  </button>`;
+/* ---------- Navegación por pestañas ---------- */
+function show(name) {
+  if (!VIEWS.includes(name)) name = 'flota';
+  view = name;
+  document.querySelectorAll('section.view').forEach((s) => s.classList.toggle('active', s.id === 'v-' + name));
+  document.querySelectorAll('nav a').forEach((a) => a.classList.toggle('active', a.dataset.view === name));
+  if (name === 'robot') refreshHistory();
+  if (name === 'metricas') refreshMetrics();
+  window.scrollTo({top: 0});
 }
+window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input, select, textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
+  const i = Number(e.key) - 1;
+  if (i >= 0 && i < VIEWS.length) location.hash = VIEWS[i];
+});
 
-async function getJSON(url) {
-  const res = await fetch(url, {cache: 'no-store'});
-  if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}`);
-  return res.json();
-}
-
-async function refreshRobots() {
-  try {
-    const robots = await getJSON('/robots');
-    lastRobots = robots;
-    const connected = robots.filter((r) => ageSeconds(r.received_at) <= STALE_SECONDS);
-    $('k-connected').textContent = connected.length;
-    $('k-known').textContent = `${robots.length} con historial`;
-    for (const s of STATES) $('k-' + s).textContent = connected.filter((r) => r.predicted_status === s).length;
-    $('cards').innerHTML = robots.length
-      ? robots.map(card).join('')
-      : '<div class="empty">Aún no hay telemetría. Ejecuta el simulador apuntando a esta URL.</div>';
-    if (!selected && connected.length) select(connected[0].robot_id);
-    $('p-updated').textContent = 'actualizado ' + new Date().toLocaleTimeString();
-    setPill('p-api', 'ok', 'API: en línea');
-  } catch (err) {
-    setPill('p-api', 'bad', 'API: no disponible');
-  }
-}
-
+/* ---------- Estado del servicio (barra superior) ---------- */
+let lastMetrics = null;
 async function refreshService() {
   try {
-    const [health, m] = await Promise.all([getJSON('/health'), getJSON('/metrics')]);
-    setPill('p-db', health.database === 'ok' ? 'ok' : health.database === 'error' ? 'bad' : 'warn',
-      `Base de datos: ${health.persistence} ${health.database === 'ok' ? 'OK' : health.database}`);
-    setPill('p-model', health.model_loaded ? 'ok' : 'bad',
-      health.model_loaded ? `Modelo: ${health.model_version} cargado` : 'Modelo: no cargado');
-    $('m-tel').textContent = m.telemetry_requests ?? m.requests_received ?? '–';
-    $('m-pred').textContent = m.prediction_requests ?? '–';
-    $('m-avg').textContent = m.avg_prediction_latency_ms != null ? `promedio ${num(m.avg_prediction_latency_ms, 1)} ms` : 'sin llamadas aún';
-    const lat = m.predict_latency_ms || {};
-    $('m-lat').textContent = lat.p50 != null ? `${num(lat.p50, 1)} · ${num(lat.p95, 1)}` : '–';
-    $('m-err').textContent = `${m.errors_4xx ?? 0} · ${m.errors_5xx ?? 0}`;
-    $('m-up').textContent = fmtUptime(m.uptime_seconds);
-    $('m-started').textContent = m.started_at ? `desde ${new Date(m.started_at).toLocaleString()}` : '';
-  } catch (err) {
-    setPill('p-db', 'warn', 'Base de datos: sin datos');
-    setPill('p-model', 'warn', 'Modelo: sin datos');
+    const [h, m] = await Promise.all([getJSON('/health'), getJSON('/metrics')]);
+    lastMetrics = m;
+    setPill('p-api', 'ok', 'API en línea');
+    setPill('p-db', h.database === 'ok' ? 'ok' : h.database === 'error' ? 'bad' : 'warn', `${h.persistence} ${h.database === 'ok' ? 'OK' : h.database}`);
+    setPill('p-model', h.model_loaded ? 'ok' : 'bad', h.model_loaded ? `Modelo ${h.model_version}` : 'Modelo no cargado');
+    const started = m.started_at ? new Date(m.started_at) : null;
+    $('p-up').textContent = started ? `encendido desde ${started.toLocaleTimeString('es-CL', {hour: '2-digit', minute: '2-digit'})} (${fmtUp(m.uptime_seconds)})` : 'encendido —';
+    if (view === 'metricas') renderMetrics(m);
+    renderModelInfo(m);
+  } catch (e) {
+    setPill('p-api', 'bad', 'API no disponible');
   }
 }
 
+/* ---------- 1. Flota ---------- */
+function card(r) {
+  const st = stateOf(r), a = age(r.received_at), stale = a > STALE_SECONDS;
+  const bat = Math.max(0, Math.min(100, Number(r.battery) || 0));
+  const conf = Number.isFinite(Number(r.confidence)) ? ` · ${Math.round(r.confidence * 100)} %` : '';
+  return `<button class="card ${st}${stale ? ' stale' : ''}" data-id="${esc(r.robot_id)}">
+    <div class="ctop"><span class="robot">${esc(r.robot_id)}</span><span class="badge ${st}">${st === 'NONE' ? 'SIN PREDICCIÓN' : st}${conf}</span></div>
+    <div class="kv"><span>Batería</span><span>${bat.toFixed(1)} %</span></div>
+    <div class="bar"><div class="fill${bat < 20 ? ' low' : ''}" style="width:${bat}%"></div></div>
+    <div class="kv"><span>Temp. motor</span><span>${num(r.motor_temp, 1)} °C</span></div>
+    <div class="kv"><span>Vibración</span><span>${num(r.vibration, 2)}</span></div>
+    <div class="kv"><span>Corriente</span><span>${num(r.motor_current, 2)} A</span></div>
+    <div class="kv"><span>Velocidad</span><span>${num(r.speed, 2)} m/s</span></div>
+    <div class="foot"><span>${stale ? 'Desconectado · ' : ''}${fmtAge(a)}</span><span><b>${int(r.records)}</b> registros</span></div>
+  </button>`;
+}
+async function refreshRobots() {
+  try {
+    robots = await getJSON('/robots');
+    const live = robots.filter((r) => age(r.received_at) <= STALE_SECONDS);
+    $('k-connected').textContent = live.length;
+    $('k-known').textContent = `${robots.length} con historial · ${live.length} enviando ahora`;
+    STATES.forEach((s) => { $('k-' + s).textContent = live.filter((r) => r.predicted_status === s).length; });
+    $('k-records').textContent = int(robots.reduce((t, r) => t + (Number(r.records) || 0), 0));
+    $('cards').innerHTML = robots.length ? robots.map(card).join('') : '<div class="empty">Aún no hay telemetría. Ejecuta el simulador apuntando a esta URL.</div>';
+    fillSelect();
+  } catch (e) { /* la barra superior ya informa el problema */ }
+}
+$('cards').addEventListener('click', (e) => {
+  const el = e.target.closest('.card'); if (!el) return;
+  const r = robots.find((x) => x.robot_id === el.dataset.id); if (!r) return;
+  selected = r.robot_id; location.hash = 'robot';
+});
+
+/* ---------- 2. Robot ---------- */
+function fillSelect() {
+  const sel = $('r-select');
+  if (!selected && robots.length) selected = (robots.find((r) => age(r.received_at) <= STALE_SECONDS) || robots[0]).robot_id;
+  const opts = robots.map((r, i) => `<option value="${i}"${r.robot_id === selected ? ' selected' : ''}>${esc(r.robot_id)}</option>`).join('');
+  if (sel.dataset.sig !== opts) { sel.innerHTML = opts; sel.dataset.sig = opts; }
+}
+$('r-select').addEventListener('change', (e) => { selected = robots[Number(e.target.value)]?.robot_id; refreshHistory(); });
+$('r-limit').addEventListener('change', () => refreshHistory());
+
 function chart(rows) {
-  const W = 760, H = 230, L = 44, R = 44, T = 12, B = 34;
-  const temps = rows.map((r) => Number(r.motor_temp));
-  const vibs = rows.map((r) => Number(r.vibration));
+  const W = 900, H = 260, L = 46, R = 46, T = 14, B = 36;
+  const temps = rows.map((r) => Number(r.motor_temp)), vibs = rows.map((r) => Number(r.vibration));
   const tMin = Math.floor(Math.min(...temps) - 2), tMax = Math.ceil(Math.max(...temps) + 2);
   const vMax = Math.max(0.5, Math.ceil(Math.max(...vibs) * 10) / 10);
   const x = (i) => L + (rows.length === 1 ? 0 : i * (W - L - R) / (rows.length - 1));
   const yT = (v) => T + (H - T - B) * (1 - (v - tMin) / (tMax - tMin || 1));
   const yV = (v) => T + (H - T - B) * (1 - v / vMax);
   const line = (vals, y) => vals.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join('');
-  const colors = {NORMAL: 'var(--normal)', WARNING: 'var(--warning)', CRITICAL: 'var(--critical)'};
   const step = rows.length > 1 ? (W - L - R) / (rows.length - 1) : 4;
-  const strip = rows.map((r, i) => `<rect x="${(x(i) - step / 2).toFixed(1)}" y="${H - 18}" width="${(step + 0.5).toFixed(1)}" height="8" fill="${colors[r.predicted_status] || 'var(--none)'}"/>`).join('');
-  const grid = [0, 0.5, 1].map((f) => {
-    const y = T + (H - T - B) * f;
-    return `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1"/>
-      <text x="${L - 6}" y="${y + 4}" text-anchor="end" font-size="11" fill="var(--critical)">${(tMax - f * (tMax - tMin)).toFixed(0)}</text>
-      <text x="${W - R + 6}" y="${y + 4}" font-size="11" fill="var(--accent)">${(vMax * (1 - f)).toFixed(1)}</text>`;
-  }).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Temperatura, vibración y estado predicho de las últimas ${rows.length} muestras">
-    ${grid}
+  const strip = rows.map((r, i) => `<rect x="${(x(i) - step / 2).toFixed(1)}" y="${H - 20}" width="${(step + 0.6).toFixed(1)}" height="10" fill="${COLORS[r.predicted_status] || 'var(--none)'}"/>`).join('');
+  const grid = [0, 0.5, 1].map((f) => { const y = T + (H - T - B) * f; return `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--line)"/>
+    <text x="${L - 6}" y="${y + 4}" text-anchor="end" font-size="11" fill="var(--critical)">${(tMax - f * (tMax - tMin)).toFixed(0)}</text>
+    <text x="${W - R + 6}" y="${y + 4}" font-size="11" fill="var(--accent)">${(vMax * (1 - f)).toFixed(1)}</text>`; }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Temperatura, vibración y estado de las últimas ${rows.length} muestras">${grid}
     <path d="${line(temps, yT)}" fill="none" stroke="var(--critical)" stroke-width="2"/>
-    <path d="${line(vibs, yV)}" fill="none" stroke="var(--accent)" stroke-width="2"/>
-    ${strip}
-  </svg>`;
+    <path d="${line(vibs, yV)}" fill="none" stroke="var(--accent)" stroke-width="2"/>${strip}</svg>`;
 }
-
 async function refreshHistory() {
-  if (!selected) return;
+  if (view !== 'robot' || !selected) return;
+  const r = robots.find((x) => x.robot_id === selected);
+  const id = encodeURIComponent(selected);
+  $('r-raw').href = `/robots/${id}/history`;
   try {
-    const rows = await getJSON(`/robots/${encodeURIComponent(selected)}/history?limit=${HISTORY_POINTS}`);
-    const counts = STATES.map((s) => `${s} ${rows.filter((r) => r.predicted_status === s).length}`).join(' · ');
-    $('h-title').textContent = `Historial de ${selected}`;
-    $('h-info').textContent = `últimas ${rows.length} muestras · ${counts}`;
-    $('h-chart').innerHTML = rows.length ? chart(rows) : '<div class="empty">Sin datos.</div>';
-  } catch (err) {
-    $('h-info').textContent = 'No se pudo cargar el historial.';
+    const rows = await getJSON(`/robots/${id}/history?limit=${$('r-limit').value}`);
+    const st = stateOf(r);
+    const counts = STATES.map((s) => rows.filter((x) => x.predicted_status === s).length);
+    $('r-kpis').innerHTML = `
+      <div class="kpi"><div class="l">Robot</div><div class="v">${esc(selected)}</div><div class="s">${r ? fmtAge(age(r.received_at)) : ''}</div></div>
+      <div class="kpi ${st}"><div class="l">Estado actual</div><div class="v">${st === 'NONE' ? '–' : st}</div><div class="s">${r && Number.isFinite(Number(r.confidence)) ? Math.round(r.confidence * 100) + ' % de confianza' : ''}</div></div>
+      <div class="kpi"><div class="l">Registros guardados</div><div class="v">${int(r?.records)}</div><div class="s">historial completo en la base</div></div>
+      <div class="kpi"><div class="l">En las muestras dibujadas</div><div class="v" style="font-size:16px;line-height:1.7"><span style="color:var(--normal)">${counts[0]}</span> · <span style="color:var(--warning)">${counts[1]}</span> · <span style="color:var(--critical)">${counts[2]}</span></div><div class="s">NORMAL · WARNING · CRITICAL</div></div>`;
+    $('r-chart').innerHTML = rows.length ? chart(rows) : '<div class="empty">Sin datos.</div>';
+    const last = rows.slice(-10).reverse();
+    $('r-table').innerHTML = '<tr><th>Hora</th><th>Estado</th><th>Confianza</th><th>Temp.</th><th>Vibración</th><th>Corriente</th><th>Velocidad</th><th>Batería</th></tr>' +
+      last.map((x) => `<tr><td>${new Date(x.received_at).toLocaleTimeString('es-CL')}</td><td><span class="badge ${stateOf(x)}">${esc(x.predicted_status ?? '–')}</span></td><td>${Number.isFinite(Number(x.confidence)) ? Math.round(x.confidence * 100) + ' %' : '–'}</td><td>${num(x.motor_temp, 1)} °C</td><td>${num(x.vibration, 2)}</td><td>${num(x.motor_current, 2)} A</td><td>${num(x.speed, 2)}</td><td>${num(x.battery, 1)} %</td></tr>`).join('');
+  } catch (e) { $('r-chart').innerHTML = '<div class="empty">No se pudo cargar el historial.</div>'; }
+}
+
+/* ---------- 3. Probar modelo ---------- */
+const FIELDS = [
+  ['robot_id', 'Robot', 'text'], ['speed', 'Velocidad (m/s)'], ['motor_temp', 'Temperatura motor (°C)'],
+  ['vibration', 'Vibración'], ['motor_current', 'Corriente (A)'], ['battery', 'Batería (%)'],
+  ['obstacle_distance', 'Distancia obstáculo (m)'], ['x', 'Posición x'], ['y', 'Posición y'],
+];
+const BASE = {robot_id: 'DEMO-01', speed: 0.9, motor_temp: 45, vibration: 0.3, motor_current: 3.8, battery: 71, obstacle_distance: 1.2, x: 4.2, y: 7.8};
+const PRESETS = {
+  sano: {values: {speed: 0.9, motor_temp: 45, vibration: 0.3, motor_current: 3.8}, hint: 'Motor frío y poca vibración.'},
+  alerta: {values: {speed: 0.7, motor_temp: 60, vibration: 0.95, motor_current: 4.6}, hint: 'Valores intermedios.'},
+  critico: {values: {speed: 0.6, motor_temp: 80, vibration: 1.8, motor_current: 6.0}, hint: 'Motor caliente y mucha vibración.'},
+  bateria: {values: {battery: 150}, hint: 'Valor imposible: debe responder 422.'},
+  nan: {values: {vibration: 'NaN'}, hint: 'NaN no es un número: debe responder 422.'},
+  falta: {values: {}, drop: 'vibration', hint: 'Se envía sin el campo vibration: debe responder 422.'},
+};
+let dropField = null;
+$('p-form').innerHTML = FIELDS.map(([k, label, type]) => `<label>${label}<input id="f-${k}" ${type === 'text' ? '' : 'inputmode="decimal"'} /></label>`).join('');
+function setForm(values) { for (const [k] of FIELDS) $('f-' + k).value = values[k] ?? ''; }
+setForm(BASE);
+document.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => {
+  const p = PRESETS[b.dataset.preset];
+  setForm({...BASE, ...PRESETS.sano.values, ...p.values});
+  dropField = p.drop || null;
+  for (const [k] of FIELDS) $('f-' + k).disabled = k === dropField;
+  $('p-hint').textContent = p.hint;
+  predict();
+}));
+document.querySelectorAll('#p-form input').forEach((i) => i.addEventListener('input', () => { dropField = null; i.disabled = false; $('p-hint').textContent = ''; }));
+$('p-send').addEventListener('click', () => predict());
+
+function bodyText() {
+  // Se arma el JSON a mano para poder enviar NaN tal cual, como lo haría un sensor defectuoso.
+  const parts = [`"timestamp": ${Date.now() / 1000}`];
+  for (const [k, , type] of FIELDS) {
+    if (k === dropField) continue;
+    const raw = $('f-' + k).value.trim();
+    if (type === 'text') parts.push(`"${k}": ${JSON.stringify(raw)}`);
+    else if (raw === 'NaN') parts.push(`"${k}": NaN`);
+    else parts.push(`"${k}": ${raw === '' || !Number.isFinite(Number(raw)) ? JSON.stringify(raw) : Number(raw)}`);
   }
+  return '{' + parts.join(', ') + '}';
+}
+async function predict() {
+  const body = bodyText();
+  const t0 = performance.now();
+  let res, data;
+  try {
+    res = await fetch('/predict', {method: 'POST', headers: {'Content-Type': 'application/json'}, body});
+    data = await res.json();
+  } catch (e) { $('p-result').innerHTML = '<div class="big ERR">Sin respuesta</div><p class="note">La API no respondió. Si estaba dormida, espera un minuto y vuelve a intentar.</p>'; return; }
+  const ms = performance.now() - t0;
+  const cls = res.status < 300 ? 'c2' : res.status < 500 ? 'c4' : 'c5';
+  let head;
+  if (res.ok) {
+    const st = STATES.includes(data.predicted_status) ? data.predicted_status : 'NONE';
+    head = `<div class="note">Estado predicho</div><div class="big ${st}">${esc(data.predicted_status)}</div>
+      <div class="meter" style="grid-template-columns:110px 1fr 54px"><span>Confianza</span><div class="track"><div style="width:${Math.round((data.confidence || 0) * 100)}%;background:${COLORS[st] || 'var(--accent)'}"></div></div><b>${Math.round((data.confidence || 0) * 100)} %</b></div>
+      <div class="kv"><span>Tiempo del modelo (inference_ms)</span><span>${num(data.inference_ms, 2)} ms</span></div>
+      <div class="kv"><span>Tiempo total medido desde este navegador</span><span>${ms.toFixed(0)} ms</span></div>
+      <div class="kv"><span>Versión del modelo</span><span>${esc(data.model_version)}</span></div>`;
+  } else {
+    const d = Array.isArray(data.detail) ? data.detail[0] : null;
+    const campo = d && Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : '';
+    head = `<div class="note">Dato rechazado</div><div class="big ERR">Error ${res.status}</div>
+      <p class="note">${res.status === 422 ? `Dato inválido${campo ? ` en <b>${esc(campo)}</b>` : ''}: ${esc(d?.msg || 'revisa los valores')}. No se guarda nada y el servicio sigue funcionando.` : esc(data.detail || '')}</p>`;
+  }
+  $('p-result').innerHTML = `<div><span class="code ${cls}">HTTP ${res.status}</span></div>${head}
+    <details><summary class="note" style="cursor:pointer">Ver lo que se envió y lo que respondió la API</summary>
+    <p class="note">Enviado:</p><pre>${esc(body)}</pre><p class="note">Respuesta:</p><pre>${esc(JSON.stringify(data, null, 2))}</pre></details>`;
+  refreshService();
 }
 
-function select(id) {
-  selected = id;
-  document.querySelectorAll('.card').forEach((c) => {
-    const on = c.dataset.id === id;
-    c.classList.toggle('selected', on);
-    c.setAttribute('aria-pressed', on);
+/* ---------- 4. Métricas ---------- */
+async function refreshMetrics() { try { renderMetrics(await getJSON('/metrics')); } catch (e) {} }
+function renderMetrics(m) {
+  const k = (l, v, s = '') => `<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+  $('m-kpis').innerHTML =
+    k('Tiempo encendido', fmtUp(m.uptime_seconds), m.started_at ? 'desde ' + new Date(m.started_at).toLocaleString('es-CL') : '') +
+    k('Telemetrías recibidas', int(m.telemetry_requests), `${int(m.requests_received)} aceptadas`) +
+    k('Predicciones /predict', int(m.prediction_requests), `${int(m.prediction_rejected_4xx)} rechazadas`) +
+    k('Errores 4xx', int(m.errors_4xx), 'datos inválidos o rutas inexistentes') +
+    k('Errores 5xx', `<span style="color:${m.errors_5xx ? 'var(--critical)' : 'var(--normal)'}">${int(m.errors_5xx)}</span>`, 'fallas del servidor (debe ser 0)') +
+    k('Solicitudes totales', int(m.requests_total), 'todas las rutas');
+  const l = m.predict_latency_ms || {}, inf = m.inference_ms || {};
+  const max = Math.max(1, Number(l.max) || 0);
+  const row = (name, v, color) => `<div class="meter"><span>${name}</span><div class="track"><div style="width:${v == null ? 0 : Math.max(2, v / max * 100)}%;background:${color}"></div></div><b>${v == null ? '–' : num(v, 1)}</b></div>`;
+  $('m-lat').innerHTML = (l.count ? row('Promedio', l.mean, 'var(--accent)') + row('P50', l.p50, 'var(--accent)') + row('P95', l.p95, 'var(--warning)') + row('Máximo', l.max, 'var(--critical)') +
+    `<p class="note">Últimas ${int(l.count)} predicciones. Solo el modelo: P50 ${num(inf.p50, 2)} ms.</p>` : '<div class="empty">Aún no hay predicciones desde el último arranque. Usa la pestaña Probar modelo.</div>');
+  const pc = m.predicted_classes || {}, tot = STATES.reduce((t, s) => t + (pc[s] || 0), 0);
+  $('m-classes').innerHTML = tot ? STATES.map((s) => `<div class="meter"><span>${s}</span><div class="track"><div style="width:${(pc[s] || 0) / tot * 100}%;background:${COLORS[s]}"></div></div><b>${int(pc[s] || 0)}</b></div>`).join('') : '<div class="empty">Sin predicciones aún.</div>';
+  const routes = m.requests_by_route || {};
+  const codes = [...new Set(Object.values(routes).flatMap((o) => Object.keys(o)))].sort();
+  $('m-routes').innerHTML = `<tr><th>Ruta</th>${codes.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>` +
+    Object.entries(routes).map(([r, o]) => `<tr><td><code>${esc(r)}</code></td>${codes.map((c) => `<td>${o[c] ? `<span class="code ${c < 300 ? 'c2' : c < 500 ? 'c4' : 'c5'}">${int(o[c])}</span>` : ''}</td>`).join('')}</tr>`).join('');
+}
+
+/* ---------- 5. Modelo ---------- */
+const CM = [[3086, 169, 0], [221, 3678, 81], [0, 870, 28395]];
+(function renderCM() {
+  let html = '<div class="h"></div>' + STATES.map((s) => `<div class="h">Predijo ${s}</div>`).join('');
+  CM.forEach((row, i) => {
+    const total = row.reduce((a, b) => a + b, 0);
+    html += `<div class="h" style="text-align:right">Real ${STATES[i]}</div>`;
+    row.forEach((v, j) => {
+      const p = v / total, good = i === j;
+      const bg = good ? `rgba(63,185,80,${0.15 + 0.6 * p})` : `rgba(240,82,74,${Math.min(0.5, 0.05 + 2 * p)})`;
+      html += `<div class="c" style="background:${bg}"><b>${(p * 100).toFixed(1)} %</b>${v.toLocaleString('es-CL')}</div>`;
+    });
   });
-  refreshHistory();
+  $('ml-cm').innerHTML = html;
+})();
+function renderModelInfo(m) {
+  const info = m.model || {};
+  $('ml-kpis').innerHTML =
+    `<div class="kpi"><div class="l">Modelo en producción</div><div class="v" style="font-size:18px">${esc(info.name || 'regresión logística')}</div><div class="s">versión ${esc(info.version || '–')}</div></div>
+     <div class="kpi"><div class="l">Variables que usa</div><div class="v" style="font-size:15px;line-height:1.5">${esc((info.features || []).join(', ') || '–')}</div></div>
+     <div class="kpi NORMAL"><div class="l">F1 macro, flotas nunca vistas</div><div class="v">0,923</div><div class="s">línea base: 0,297</div></div>
+     <div class="kpi"><div class="l">Datos de entrenamiento</div><div class="v">105.000</div><div class="s">muestras de 30 flotas</div></div>`;
 }
 
-$('cards').addEventListener('click', (ev) => {
-  const el = ev.target.closest('.card');
-  if (!el) return;
-  const robot = lastRobots.find((r) => r.robot_id === el.dataset.id);
-  if (robot) select(robot.robot_id);
-});
-
+/* ---------- Arranque ---------- */
+show(location.hash.slice(1) || 'flota');
 refreshRobots(); refreshService();
 setInterval(refreshRobots, 2000);
 setInterval(refreshService, 5000);

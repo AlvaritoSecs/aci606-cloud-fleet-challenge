@@ -160,3 +160,22 @@ def test_history_limit_returns_last_n_in_order(client):
     assert [h["timestamp"] for h in last] == [1780000000.0 + i for i in range(25, 30)]
     assert len(client.get("/robots/R01/history").json()) == 30  # sin limit: historial completo
     assert client.get("/robots/R01/history?limit=0").status_code == 422
+
+
+def test_robots_include_record_count_that_survives_restart(db_url):
+    with TestClient(create_app(db_url)) as c:
+        for i in range(7):
+            c.post("/telemetry", json={**SAMPLE, "robot_id": "C1", "timestamp": 1780000000.0 + i})
+        c.post("/telemetry", json={**SAMPLE, "robot_id": "C2"})
+        counts = {r["robot_id"]: r["records"] for r in c.get("/robots").json()}
+        assert counts == {"C1": 7, "C2": 1}
+    with TestClient(create_app(db_url)) as c:  # reinicio: el conteo se reconstruye desde la base
+        c.post("/telemetry", json={**SAMPLE, "robot_id": "C1"})
+        counts = {r["robot_id"]: r["records"] for r in c.get("/robots").json()}
+        assert counts == {"C1": 8, "C2": 1}
+        assert len(c.get("/robots/C1/history").json()) == 8
+
+
+def test_root_redirects_to_dashboard(client):
+    r = client.get("/", follow_redirects=False)
+    assert r.status_code in (302, 307) and r.headers["location"] == "/dashboard"
