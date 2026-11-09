@@ -1,0 +1,37 @@
+# Prende la flota de robots desde GitHub, sin Codespace ni computador propio.
+# Uso: pestaña Actions -> "flota-simulador" -> Run workflow -> elegir minutos -> Run workflow.
+# Para apagarla antes: abrir la ejecución y presionar "Cancel workflow".
+name: flota-simulador
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutos:
+        description: "Minutos que estará prendida la flota"
+        default: "45"
+        required: true
+      robots:
+        description: "Cantidad de robots"
+        default: "5"
+        required: true
+
+concurrency:
+  group: flota-simulador
+  cancel-in-progress: true
+
+jobs:
+  flota:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+      - run: pip install requests
+      - name: Despertar el servicio
+        run: curl --fail --silent --show-error --max-time 120 --retry 5 --retry-delay 10 https://aci606-cloud-fleet.onrender.com/health
+      - name: Flota enviando datos
+        run: |
+          timeout "${{ inputs.minutos }}m" python simulator/fleet_simulator.py \
+            --api https://aci606-cloud-fleet.onrender.com --robots "${{ inputs.robots }}" --timeout 10 || true
