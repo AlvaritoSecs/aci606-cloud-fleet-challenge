@@ -32,6 +32,12 @@ jobs:
       - name: Despertar el servicio
         run: curl --fail --silent --show-error --max-time 120 --retry 5 --retry-delay 10 https://aci606-cloud-fleet.onrender.com/health
       - name: Flota enviando datos
+        env:
+          PYTHONUNBUFFERED: "1"
         run: |
           timeout "${{ inputs.minutos }}m" python simulator/fleet_simulator.py \
             --api https://aci606-cloud-fleet.onrender.com --robots "${{ inputs.robots }}" --timeout 10 || true
+      - name: Resumen (registros por robot)
+        if: always()
+        run: |
+          curl --silent --max-time 60 https://aci606-cloud-fleet.onrender.com/robots | python -c "import json,sys; [print(r['robot_id'], r.get('predicted_status'), r.get('records'), 'registros') for r in json.load(sys.stdin)]"
