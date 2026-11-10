@@ -5,13 +5,13 @@ Servicio Cloud persistente que recibe la telemetría de una flota virtual de rob
 | | |
 |---|---|
 | **URL pública** | **https://aci606-cloud-fleet.onrender.com** |
-| Panel | https://aci606-cloud-fleet.onrender.com/dashboard |
+| Panel (la URL principal lleva aquí) | https://aci606-cloud-fleet.onrender.com/dashboard |
 | Documentación interactiva de la API | https://aci606-cloud-fleet.onrender.com/docs |
 | Plataforma (PaaS) | Render: Web Service, plan Free, despliegue automático desde `main` |
 | Datos | Neon: PostgreSQL gestionado, región AWS us-east-1 (Virginia), tabla `telemetry` |
 | Código | GitHub: este repositorio |
 
-> **Primera solicitud lenta:** el plan gratuito de Render suspende el servicio tras 15 minutos sin tráfico y tarda alrededor de un minuto en despertar. Antes de evaluar, abre `/health` y espera la respuesta.
+> **Primera solicitud lenta:** el plan gratuito de Render suspende el servicio tras 15 minutos sin tráfico y tarda alrededor de un minuto en despertar. Para evitarlo, el workflow `keep-alive` llama a `/health` cada 10 minutos. Antes de evaluar, conviene abrir `/health` y esperar la respuesta.
 
 El enunciado original del profesor está en [`docs/STARTER_README.md`](docs/STARTER_README.md).
 
@@ -70,11 +70,11 @@ El enunciado original del profesor está en [`docs/STARTER_README.md`](docs/STAR
 |---|---|
 | `GET /health` | Estado del servicio, de la base y del modelo. No consulta la base. |
 | `POST /telemetry` | Valida la muestra, predice su estado y la guarda. Responde `accepted`, `robot_id`, `server_time`, `note` y `predicted_status`. |
-| `GET /robots` | Última muestra de cada robot, con su predicción. |
+| `GET /robots` | Última muestra de cada robot, con su predicción y `records` (cuántos registros tiene guardados). |
 | `GET /robots/{robot_id}/history` | Historial **completo** del robot en orden de llegada; 404 si no existe. El parámetro opcional `?limit=N` devuelve solo los últimos N registros (lo usa el panel). |
 | `POST /predict` | Predicción sin guardar nada. Responde `robot_id`, `predicted_status`, `confidence`, `model_version` e `inference_ms`. |
 | `GET /metrics` | Métricas operacionales (sección 5). |
-| `GET /dashboard` | Panel web. |
+| `GET /dashboard` | Panel web con 6 pestañas. `GET /` redirige aquí. |
 
 Ejemplo:
 
@@ -225,26 +225,37 @@ Los contadores viven en memoria y **vuelven a cero cuando el servicio se reinici
 
 ## 6. Panel
 
-`/dashboard` muestra:
-- robots conectados (los que enviaron telemetría en los últimos 15 s);
-- telemetría más reciente y batería de cada robot;
-- estado predicho con color y texto, y su confianza;
-- conteo de la flota por estado;
-- historial del robot elegido: temperatura, vibración y franja de estados de las últimas 150 muestras;
-- estado de la API, la base y el modelo, con predicciones, P50/P95, errores y tiempo encendido.
+`/dashboard` es un centro de operación con 6 pestañas; se cambia entre ellas con clic o con las teclas 1 a 6. Arriba siempre muestra el estado de la API, de la base y del modelo, y desde qué hora está encendido el servicio.
 
-Todo texto que viene de la API se escapa antes de mostrarse.
+| Tecla | Pestaña | Qué muestra |
+|---|---|---|
+| 1 | Flota | Robots conectados (enviaron datos en los últimos 15 s), conteo por estado predicho, registros guardados en total y una tarjeta por robot con estado, confianza, batería, sensores y registros guardados |
+| 2 | Robot | Historial del robot elegido: temperatura, vibración y franja de estados predichos de las últimas 50, 150 o 500 muestras, y tabla de las últimas 10 |
+| 3 | Probar modelo | Formulario que llama a `POST /predict`, con ejemplos (robot sano, con alerta, crítico) y tres datos inválidos (batería 150 %, NaN y campo faltante) que deben responder 422 |
+| 4 | Métricas | `GET /metrics` en formato legible: tiempo encendido, solicitudes, errores 4xx/5xx, latencia media/P50/P95/máxima, predicciones por estado y solicitudes por ruta |
+| 5 | Modelo ML | F1 macro en flotas no vistas frente a la línea base, F1 por estado, matriz de confusión y comparación de modelos |
+| 6 | Arquitectura | Diagrama Render + Neon + GitHub, decisiones de diseño y enlaces a la API |
+
+Los registros guardados por robot hacen visible la prueba de reinicio: el número es el mismo (o mayor, si la flota sigue enviando) antes y después de reiniciar el servicio. El conteo se reconstruye desde la base al arrancar y luego se mantiene en memoria, sin una consulta extra por solicitud.
+
+Es una sola página HTML con JavaScript, sin librerías externas. Todo texto que viene de la API se escapa antes de mostrarse.
+
+### Flota de demostración sin computador propio
+
+El workflow **flota-simulador** ejecuta `simulator/fleet_simulator.py` contra la URL pública desde GitHub Actions: pestaña **Actions** → **flota-simulador** → **Run workflow**, elegir minutos y cantidad de robots. Al final imprime los registros guardados por robot.
 
 ---
 
 ## 7. Pruebas
 
 ```bash
-pytest                                             # 47 pruebas, con SQLite temporal
+pytest                                             # 49 pruebas, con SQLite temporal
 TEST_DATABASE_URL=postgresql://... pytest tests/test_api.py   # contra PostgreSQL de PRUEBA (borra la tabla)
 ```
 
-Cubren: historial de más de 100 registros, persistencia tras reiniciar, `/robots` con la última muestra, 404, 14 casos inválidos en 4xx, contrato de `/predict`, 200 predicciones concurrentes, servicio sin modelo (503), métricas y el atajo NumPy idéntico al pipeline.
+Cubren: historial de más de 100 registros, persistencia tras reiniciar, `/robots` con la última muestra y el conteo de registros (también después de reiniciar), 404, 14 casos inválidos en 4xx, contrato de `/predict`, 200 predicciones concurrentes, servicio sin modelo (503), métricas, la redirección de `/` y el atajo NumPy idéntico al pipeline.
+
+El workflow **tests** ejecuta `pytest` en GitHub en cada Pull Request y en cada cambio a `main`.
 
 ---
 
@@ -260,7 +271,13 @@ Cada fase se desarrolló en su propia rama y se integró a `main` mediante Pull 
 | #4 | `feature/metrics` | `/metrics`, prueba de carga, inferencia más rápida |
 | #5 | `feature/dashboard` | Panel con predicciones, agregados e historial |
 | #6 | `feature/verification` | Script de verificación de reinicio |
-| #7 | `feature/docs` | Este README y las evidencias de despliegue |
+| #7 | `feature/docs` | README de entrega y evidencias de despliegue |
+| #8 | `feature/team` | Integrantes en el README |
+| #9 | `feature/keepalive` | Workflow que mantiene despierto el servicio |
+| #10 | `feature/ui-tabs` | Panel con 6 pestañas, registros por robot, `/` → panel y workflow de pruebas |
+| #11 | `feature/sim-action` | Botón para ejecutar la flota desde GitHub Actions |
+| #12 | `feature/sim-summary` | Avance y resumen de registros en ese workflow |
+| #13 | `feature/readme-final` | Este README actualizado |
 
 No hay credenciales en el historial: se revisó con `git log -p --all`. `.env` está en `.gitignore` y `.env.example` solo trae los nombres de las variables.
 
@@ -285,4 +302,5 @@ models/     model.joblib, model_meta.json
 reports/    EDA, comparación de modelos, evaluación en flotas no vistas, verificación del despliegue
 simulator/  simulador y generador del profesor (sin modificar)
 tests/      pytest (test_*.py) y scripts contra un servidor real (smoke_test, load_test, verify_restart)
+.github/    workflows: tests (pytest), keep-alive (despertador) y flota-simulador (flota de demostración)
 ```
